@@ -1,6 +1,7 @@
 [package]
-name = "vltnl"
+name = "vltl"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+core-foundation = "0.10"
