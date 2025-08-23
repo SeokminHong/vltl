@@ -19,4 +19,8 @@ function __vltl -S --on-event fish_preexec
         return 0
     end
     echo "$program_name is not available"
+    # Register alias
+    alias $program_name=(vltl convert $program_name) #<kor -> eng command>
+    # Switch IME to English
+    vltl switch-to-english
 end
