@@ -21,6 +21,7 @@ enum Commands {
     Convert {
         word: String,
     },
+    #[cfg(target_os = "macos")]
     /// IME를 영어로 전환
     SwitchToEnglish,
 }
@@ -39,8 +40,8 @@ fn main() {
             let converted = converter::convert_korean_to_english(&word);
             println!("{}", converted);
         }
+        #[cfg(target_os = "macos")]
         Commands::SwitchToEnglish => {
-            #[cfg(target_os = "macos")]
             match ime::switch_to_english() {
                 Ok(()) => {
                     // 성공적으로 전환됨
@@ -49,11 +50,6 @@ fn main() {
                     eprintln!("{}", e);
                     process::exit(1);
                 }
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                eprintln!("이 기능은 macOS에서만 지원됩니다.");
-                process::exit(1);
             }
         }
     }
