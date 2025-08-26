@@ -1,11 +1,11 @@
 function __vltl_check -S
     set -l program_name $argv[1]
     if type -q $program_name
-        echo "$program_name is installed"
+        # Installed
         return 0
     end
     if abbr -q $program_name
-        echo "$program_name is an abbreviation for another command"
+        # Abbreviation
         return 0
     end
 
@@ -14,13 +14,14 @@ end
 
 function __vltl -S --on-event fish_preexec
     set -l program_name (string split ' ' $argv[1])[1]
-    if __vltnl_check $program_name -eq 0
-        echo "$program_name is available"
+    if __vltl_check $program_name -eq 0
+        # Available
         return 0
     end
-    echo "$program_name is not available"
+    set -l eng_name (vltl convert $program_name)
     # Register alias
-    alias $program_name=(vltl convert $program_name) #<kor -> eng command>
+    alias $program_name=$eng_name #<kor -> eng command>
+    echo "vltl: New alias ($program_name -> $eng_name)"
     # Switch IME to English
     vltl switch-to-english
 end

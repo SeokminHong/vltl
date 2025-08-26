@@ -16,17 +16,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Init,
     /// 한국어로 입력된 명령어를 영어로 변환
-    Convert { word: String },
+    Convert {
+        word: String,
+    },
     /// IME를 영어로 전환
     SwitchToEnglish,
 }
+
+const INIT_STR: &str = include_str!("../init.fish");
 
 // CLI 진입점
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Init => {
+            println!("{}", INIT_STR);
+        }
         Commands::Convert { word } => {
             let converted = converter::convert_korean_to_english(&word);
             println!("{}", converted);
