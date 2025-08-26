@@ -35,3 +35,5 @@ cargo install vltl
    vltl: New alias (ㅔㅞㅡ -> pnpm)
    10.5.0
    ```
+
+https://github.com/user-attachments/assets/3118923a-edd9-4fc0-9688-ad3a0bee7a23
