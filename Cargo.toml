@@ -2,6 +2,11 @@
 name = "vltl"
 version = "0.1.0"
 edition = "2024"
+description = "A Fish shell util to convert a Korean typo to the English command."
+license = "MIT"
+authors = ["Seokmin Hong <ghdtjrald240@gmail.com>"]
+readme = "README.md"
+repository = "https://github.com/SeokminHong/vltl"
 
 [dependencies]
 core-foundation = "0.10"
