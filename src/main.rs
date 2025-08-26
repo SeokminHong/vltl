@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use std::process;
 
 #[derive(Parser)]
-#[command(name = "vltl")]
+#[command(version, name = "vltl")]
 #[command(about = "한국어 IME로 잘못 입력된 명령어를 영어로 변환하고 IME를 영어로 전환하는 도구")]
 struct Cli {
     #[command(subcommand)]
