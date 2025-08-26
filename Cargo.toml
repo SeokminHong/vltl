@@ -1,6 +1,6 @@
 [package]
 name = "vltl"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A Fish shell util to convert a Korean typo to the English command."
 license = "MIT"
