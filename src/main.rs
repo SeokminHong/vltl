@@ -1,6 +1,5 @@
-#![cfg(target_os = "macos")]
-
 mod converter;
+#[cfg(target_os = "macos")]
 mod ime;
 
 use clap::{Parser, Subcommand};
