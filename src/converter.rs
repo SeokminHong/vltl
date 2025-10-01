@@ -95,11 +95,11 @@ fn decompose_hangul(ch: char) -> Vec<char> {
         if let Some(jung) = jungsung.get(jungsung_idx as usize) {
             result.push(*jung);
         }
-        if jongsung_idx > 0 {
-            if let Some(jong) = jongsung.get(jongsung_idx as usize) {
-                for c in jong.chars() {
-                    result.push(c);
-                }
+        if jongsung_idx > 0
+            && let Some(jong) = jongsung.get(jongsung_idx as usize)
+        {
+            for c in jong.chars() {
+                result.push(c);
             }
         }
         result
@@ -133,7 +133,7 @@ pub fn convert_korean_to_english(korean_input: &str) -> String {
 
     normalized
         .chars()
-        .flat_map(|c| decompose_hangul(c))
+        .flat_map(decompose_hangul)
         .flat_map(|jamo| {
             // 매핑이 있으면 그 문자열을, 없으면 원문 글자를 사용
             if let Some(out) = map.get(&jamo) {
