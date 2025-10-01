@@ -109,6 +109,19 @@ fn decompose_hangul(ch: char) -> Vec<char> {
     }
 }
 
+/// 문자열에 한국어 문자가 포함되어 있는지 확인
+/// - 한글 완성형 음절 (가-힣: U+AC00 - U+D7A3)
+/// - 한글 자모 (ㄱ-ㅎ, ㅏ-ㅣ: U+3131 - U+318E)
+pub fn contains_korean(input: &str) -> bool {
+    input.chars().any(|c| {
+        let code = c as u32;
+        // 한글 완성형 음절 (가-힣)
+        (0xAC00..=0xD7A3).contains(&code)
+            // 한글 자모 (ㄱ-ㅎ, ㅏ-ㅣ)
+            || (0x3131..=0x318E).contains(&code)
+    })
+}
+
 /// 한국어로 입력된 문자열을 영어로 변환
 /// - 먼저 NFC 정규화를 수행하여 가능한 경우 완성형으로 결합
 /// - 이후 음절은 자모로 분해, 단일 자모는 그대로 두고 매핑으로 변환
@@ -158,5 +171,34 @@ mod tests {
         assert_eq!(convert_korean_to_english("ㅔㅞㅡ"), "pnpm");
         assert_eq!(convert_korean_to_english("ㅛㅁ구"), "yarn");
         assert_eq!(convert_korean_to_english("ㅎㄱ데"), "grep");
+    }
+
+    #[test]
+    fn test_contains_korean() {
+        // 한글 완성형
+        assert!(contains_korean("피"));
+        assert!(contains_korean("며"));
+        assert!(contains_korean("내"));
+        assert!(contains_korean("안녕하세요"));
+        
+        // 한글 자모
+        assert!(contains_korean("ㅍㅣ"));
+        assert!(contains_korean("ㅔㅞㅡ"));
+        assert!(contains_korean("ㅛㅁ구"));
+        
+        // 영문
+        assert!(!contains_korean("ls"));
+        assert!(!contains_korean("npm"));
+        assert!(!contains_korean("hello"));
+        assert!(!contains_korean("nonexistent"));
+        
+        // 혼합
+        assert!(contains_korean("ls안녕"));
+        assert!(contains_korean("helloㅎㅎ"));
+        
+        // 기타
+        assert!(!contains_korean(""));
+        assert!(!contains_korean("123"));
+        assert!(!contains_korean("!@#$"));
     }
 }

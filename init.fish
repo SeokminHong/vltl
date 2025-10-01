@@ -18,6 +18,11 @@ function __vltl -S --on-event fish_preexec
         # Available
         return 0
     end
+    # 한국어가 포함되어 있는지 확인
+    if not vltl has-korean $program_name
+        # 한국어가 없으면 변환 및 alias 등록 안 함
+        return 0
+    end
     set -l eng_name (vltl convert $program_name)
     # Register alias
     alias $program_name=$eng_name #<kor -> eng command>
