@@ -249,6 +249,48 @@ function test_full_integration_scenario
     end
 end
 
+function test_switch_to_english_command
+    echo ""
+    echo "Testing switch-to-english command availability..."
+    
+    # Check if we're on macOS
+    if test (uname -s) = "Darwin"
+        echo "Running on macOS - testing switch-to-english command"
+        
+        # Test 1: Command should exist on macOS
+        if vltl help | grep -q "switch-to-english"
+            print_test_result "switch-to-english command exists on macOS" 0
+        else
+            print_test_result "switch-to-english command exists on macOS" 1
+        end
+        
+        # Test 2: Command should execute without error (even if IME doesn't change)
+        # We can't really test if IME changes, but we can test that the command runs
+        if vltl switch-to-english 2>&1 | grep -qv "error: unrecognized subcommand"
+            print_test_result "switch-to-english command executes on macOS" 0
+        else
+            print_test_result "switch-to-english command executes on macOS" 1
+        end
+    else
+        echo "Running on Linux - verifying switch-to-english is not available"
+        
+        # Test: Command should NOT exist on Linux
+        if not vltl help | grep -q "switch-to-english"
+            print_test_result "switch-to-english command not available on Linux" 0
+        else
+            print_test_result "switch-to-english command not available on Linux" 1
+        end
+        
+        # Test: Calling it should fail gracefully (exit code 2)
+        vltl switch-to-english 2>/dev/null
+        if test $status -eq 2
+            print_test_result "switch-to-english fails gracefully on Linux" 0
+        else
+            print_test_result "switch-to-english fails gracefully on Linux" 1
+        end
+    end
+end
+
 # Run all tests
 echo "========================================"
 echo "Running vltl E2E Tests"
@@ -262,6 +304,7 @@ test_alias_execution
 test_hook_with_nonexistent_command
 test_hook_with_existing_alias
 test_full_integration_scenario
+test_switch_to_english_command
 
 # Print summary
 echo ""
