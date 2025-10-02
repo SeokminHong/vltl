@@ -24,6 +24,11 @@ function __vltl -S --on-event fish_preexec
         return 0
     end
     set -l eng_name (vltl convert $program_name)
+    # 변환된 영어 명령어가 존재하는지 확인
+    if not __vltl_check $eng_name -eq 0
+        # 변환된 명령어가 존재하지 않으면 alias 등록 안 함
+        return 0
+    end
     # Register alias
     alias $program_name=$eng_name #<kor -> eng command>
     echo "vltl: New alias ($program_name -> $eng_name)"
