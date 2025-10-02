@@ -95,11 +95,11 @@ fn decompose_hangul(ch: char) -> Vec<char> {
         if let Some(jung) = jungsung.get(jungsung_idx as usize) {
             result.push(*jung);
         }
-        if jongsung_idx > 0 {
-            if let Some(jong) = jongsung.get(jongsung_idx as usize) {
-                for c in jong.chars() {
-                    result.push(c);
-                }
+        if jongsung_idx > 0
+            && let Some(jong) = jongsung.get(jongsung_idx as usize)
+        {
+            for c in jong.chars() {
+                result.push(c);
             }
         }
         result
@@ -107,6 +107,19 @@ fn decompose_hangul(ch: char) -> Vec<char> {
         // 완성형이 아니면 그대로 반환
         vec![ch]
     }
+}
+
+/// 문자열에 한국어 문자가 포함되어 있는지 확인
+/// - 한글 완성형 음절 (가-힣: U+AC00 - U+D7A3)
+/// - 한글 자모 (ㄱ-ㅎ, ㅏ-ㅣ: U+3131 - U+318E)
+pub fn contains_korean(input: &str) -> bool {
+    input.chars().any(|c| {
+        let code = c as u32;
+        // 한글 완성형 음절 (가-힣)
+        (0xAC00..=0xD7A3).contains(&code)
+            // 한글 자모 (ㄱ-ㅎ, ㅏ-ㅣ)
+            || (0x3131..=0x318E).contains(&code)
+    })
 }
 
 /// 한국어로 입력된 문자열을 영어로 변환
@@ -120,7 +133,7 @@ pub fn convert_korean_to_english(korean_input: &str) -> String {
 
     normalized
         .chars()
-        .flat_map(|c| decompose_hangul(c))
+        .flat_map(decompose_hangul)
         .flat_map(|jamo| {
             // 매핑이 있으면 그 문자열을, 없으면 원문 글자를 사용
             if let Some(out) = map.get(&jamo) {
@@ -158,5 +171,34 @@ mod tests {
         assert_eq!(convert_korean_to_english("ㅔㅞㅡ"), "pnpm");
         assert_eq!(convert_korean_to_english("ㅛㅁ구"), "yarn");
         assert_eq!(convert_korean_to_english("ㅎㄱ데"), "grep");
+    }
+
+    #[test]
+    fn test_contains_korean() {
+        // 한글 완성형
+        assert!(contains_korean("피"));
+        assert!(contains_korean("며"));
+        assert!(contains_korean("내"));
+        assert!(contains_korean("안녕하세요"));
+        
+        // 한글 자모
+        assert!(contains_korean("ㅍㅣ"));
+        assert!(contains_korean("ㅔㅞㅡ"));
+        assert!(contains_korean("ㅛㅁ구"));
+        
+        // 영문
+        assert!(!contains_korean("ls"));
+        assert!(!contains_korean("npm"));
+        assert!(!contains_korean("hello"));
+        assert!(!contains_korean("nonexistent"));
+        
+        // 혼합
+        assert!(contains_korean("ls안녕"));
+        assert!(contains_korean("helloㅎㅎ"));
+        
+        // 기타
+        assert!(!contains_korean(""));
+        assert!(!contains_korean("123"));
+        assert!(!contains_korean("!@#$"));
     }
 }

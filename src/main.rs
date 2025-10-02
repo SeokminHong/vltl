@@ -20,6 +20,10 @@ enum Commands {
     Convert {
         word: String,
     },
+    /// 문자열에 한국어가 포함되어 있는지 확인 (exit code 0: 포함, 1: 미포함)
+    HasKorean {
+        word: String,
+    },
     #[cfg(target_os = "macos")]
     /// IME를 영어로 전환
     SwitchToEnglish,
@@ -38,6 +42,14 @@ fn main() {
         Commands::Convert { word } => {
             let converted = converter::convert_korean_to_english(&word);
             println!("{}", converted);
+        }
+        Commands::HasKorean { word } => {
+            // 한국어가 포함되어 있으면 exit code 0, 아니면 1
+            if converter::contains_korean(&word) {
+                process::exit(0);
+            } else {
+                process::exit(1);
+            }
         }
         #[cfg(target_os = "macos")]
         Commands::SwitchToEnglish => {
