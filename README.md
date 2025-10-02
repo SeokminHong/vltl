@@ -52,7 +52,7 @@ cargo test
 
 #### E2E Tests
 
-End-to-end tests are written in Fish shell. To run them:
+End-to-end tests verify the actual fish shell hook integration. To run them:
 
 1. Install fish shell:
    ```sh
@@ -74,10 +74,13 @@ End-to-end tests are written in Fish shell. To run them:
    ```
 
 The e2e tests verify:
-- Korean to English conversion (`vltl convert`)
-- Korean detection (`vltl has-korean`)
-- Fish shell integration (`vltl init`)
-- Command checking functionality
+- Fish hook installation and registration to `fish_preexec` event
+- Hook triggering when Korean commands are entered
+- Alias creation for Korean commands that map to existing commands
+- Alias execution works correctly
+- Hook behavior with non-existent commands
+- Hook behavior with already aliased commands
+- Full integration scenario from Korean input to alias creation
 
 ### GitHub Actions
 
