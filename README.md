@@ -37,3 +37,56 @@ cargo install vltl
    ```
 
 https://github.com/user-attachments/assets/3118923a-edd9-4fc0-9688-ad3a0bee7a23
+
+## Development
+
+### Running Tests
+
+#### Unit Tests
+
+Run Rust unit tests:
+
+```sh
+cargo test
+```
+
+#### E2E Tests
+
+End-to-end tests verify the actual fish shell hook integration. To run them:
+
+1. Install fish shell:
+   ```sh
+   # On Ubuntu/Debian
+   sudo apt-get install fish
+   
+   # On macOS
+   brew install fish
+   ```
+
+2. Build the project:
+   ```sh
+   cargo build --release
+   ```
+
+3. Run the e2e tests:
+   ```sh
+   PATH=$PATH:$(pwd)/target/release fish e2e_test.fish
+   ```
+
+The e2e tests verify:
+- Fish hook installation and registration to `fish_preexec` event
+- Hook triggering when Korean commands are entered
+- Alias creation for Korean commands that map to existing commands
+- Alias execution works correctly
+- Hook behavior with non-existent commands
+- Hook behavior with already aliased commands
+- Full integration scenario from Korean input to alias creation
+
+### GitHub Actions
+
+The project uses GitHub Actions for continuous integration:
+
+- **Build workflow** (`.github/workflows/build.yml`): Runs unit tests and builds the project
+- **E2E Tests workflow** (`.github/workflows/e2e.yml`): Runs end-to-end tests with fish shell
+
+Both workflows run on every push and pull request to the `main` branch.
