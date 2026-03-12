@@ -414,6 +414,48 @@ function test_is_command_position
     end
 end
 
+function test_no_abbr_for_nonexistent_command
+    echo ""
+    echo "Testing no abbr creation for non-existent commands..."
+
+    # Source the init script
+    vltl init | source
+
+    # Verify the init script includes a type -q guard for command existence
+    set -l init_content (vltl init)
+    if echo "$init_content" | grep -q 'type -q'
+        print_test_result "guard: init script includes type -q check" 0
+    else
+        print_test_result "guard: init script includes type -q check" 1
+    end
+
+    # Verify that a non-existent command is not recognized by type -q or abbr -q
+    set -l nonexistent "xyznonexistcmd_vltl_test"
+    if not type -q "$nonexistent"; and not abbr -q -- "$nonexistent"
+        print_test_result "guard: non-existent command not recognized" 0
+    else
+        print_test_result "guard: non-existent command not recognized" 1
+    end
+
+    # Verify that an existing command IS recognized
+    if type -q echo
+        print_test_result "guard: existing command recognized by type -q" 0
+    else
+        print_test_result "guard: existing command recognized by type -q" 1
+    end
+
+    # Verify that a command with abbr IS recognized
+    abbr -a -- "vltl_test_cmd" "echo test"
+    if abbr -q -- "vltl_test_cmd"
+        print_test_result "guard: abbr-only command recognized by abbr -q" 0
+    else
+        print_test_result "guard: abbr-only command recognized by abbr -q" 1
+    end
+
+    # Cleanup
+    abbr -e -- "vltl_test_cmd"
+end
+
 function test_integration_convert_flow
     echo ""
     echo "Testing integration conversion flow..."
@@ -471,6 +513,7 @@ test_vltl_path_env_var
 test_switch_to_english_command
 test_extract_programs_command
 test_is_command_position
+test_no_abbr_for_nonexistent_command
 test_integration_convert_flow
 
 # Print summary

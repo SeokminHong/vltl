@@ -17,6 +17,11 @@ function __vltl_convert_and_expand
 
         set -l converted ($__vltl_bin convert -- "$token")
         if test -n "$converted"; and test "$converted" != "$token"
+            # 존재하지 않는 명령어에 대해서는 변환하지 않음
+            if not type -q "$converted"; and not abbr -q -- "$converted"
+                return
+            end
+
             commandline --current-token --replace -- "$converted"
 
             # 변환된 토큰에 대응하는 abbr이 있으면 한글 트리거로 자동 등록
