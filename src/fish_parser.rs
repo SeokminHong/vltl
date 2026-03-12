@@ -299,4 +299,52 @@ mod tests {
             vec!["echo"]
         );
     }
+
+    #[test]
+    fn test_single_korean_command_no_args() {
+        // ㅛㅁ구 should be extracted as a program name (converts to "yarn")
+        assert_eq!(extract_program_names("ㅛㅁ구"), vec!["ㅛㅁ구"]);
+    }
+
+    #[test]
+    fn debug_tree_structure() {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_fish::language())
+            .expect("Error loading fish grammar");
+
+        for input in &["ㅛㅁ구", "yarn", "ㅛㅁ구 test", "ㅣㄴ -la"] {
+            let tree = parser.parse(input, None).unwrap();
+            eprintln!("\n=== Input: {:?} ===", input);
+            debug_node(&tree.root_node(), input.as_bytes(), 0);
+        }
+    }
+}
+
+fn debug_node(node: &Node, source: &[u8], indent: usize) {
+    let text = String::from_utf8_lossy(&source[node.byte_range()]);
+    let field = "";
+    eprintln!(
+        "{:indent$}{} [kind={}, named={}, field_count={}] = {:?}",
+        "",
+        node.kind(),
+        node.kind_id(),
+        node.is_named(),
+        node.child_count(),
+        text,
+        indent = indent
+    );
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            let f = cursor.field_name().unwrap_or("");
+            if !f.is_empty() {
+                eprint!("{:indent$}  (field={}): ", "", f, indent = indent);
+            }
+            debug_node(&cursor.node(), source, indent + 2);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
 }
