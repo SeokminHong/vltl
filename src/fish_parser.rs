@@ -45,39 +45,25 @@ fn collect_command_names(node: &Node, source: &[u8], names: &mut Vec<String>) {
         return;
     }
 
-    // Handle ERROR nodes that contain bare words but no command children.
+    // Handle ERROR nodes that may contain bare words or structural nodes
+    // (e.g. `pipe`, `conjunction`) wrapping command nodes.
     if node.is_error() {
-        let has_command_child = {
-            let mut cursor = node.walk();
-            let mut found = false;
-            if cursor.goto_first_child() {
-                loop {
-                    if cursor.node().kind() == "command" {
-                        found = true;
-                        break;
-                    }
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
+        // First try recursing into children to find command nodes
+        // (they may be nested inside pipe/conjunction/etc.)
+        let len_before = names.len();
+        let mut cursor = node.walk();
+        if cursor.goto_first_child() {
+            loop {
+                collect_command_names(&cursor.node(), source, names);
+                if !cursor.goto_next_sibling() {
+                    break;
                 }
             }
-            found
-        };
+        }
 
-        if has_command_child {
-            // Recurse normally to pick up the nested command(s).
-            let mut cursor = node.walk();
-            if cursor.goto_first_child() {
-                loop {
-                    collect_command_names(&cursor.node(), source, names);
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-        } else {
-            // No command child — treat the first non-assignment word as the
-            // program name.
+        // If recursion found nothing, treat the first non-assignment word as
+        // the program name.
+        if names.len() == len_before {
             let mut cursor = node.walk();
             if cursor.goto_first_child() {
                 loop {
@@ -154,6 +140,107 @@ fn get_program_name(command_node: &Node, source: &[u8]) -> Option<String> {
         }
     }
     None
+}
+
+/// Get the byte range `(start, end)` of the program name from a `command` node.
+fn get_program_name_range(command_node: &Node, source: &[u8]) -> Option<(usize, usize)> {
+    if let Some(name_node) = command_node.child_by_field_name("name") {
+        if !is_assignment_word(&name_node, source) {
+            return Some((name_node.start_byte(), name_node.end_byte()));
+        }
+    }
+    let mut cursor = command_node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            if cursor.field_name() == Some("argument") {
+                let child = cursor.node();
+                if !is_assignment_word(&child, source) {
+                    return Some((child.start_byte(), child.end_byte()));
+                }
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+    None
+}
+
+/// Recursively collect byte ranges of command name positions from the AST.
+fn collect_command_name_ranges(node: &Node, source: &[u8], ranges: &mut Vec<(usize, usize)>) {
+    if node.kind() == "command" {
+        if let Some(range) = get_program_name_range(node, source) {
+            ranges.push(range);
+        }
+        return;
+    }
+
+    if node.is_error() {
+        let len_before = ranges.len();
+        let mut cursor = node.walk();
+        if cursor.goto_first_child() {
+            loop {
+                collect_command_name_ranges(&cursor.node(), source, ranges);
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+
+        if ranges.len() == len_before {
+            let mut cursor = node.walk();
+            if cursor.goto_first_child() {
+                loop {
+                    let child = cursor.node();
+                    if child.kind() == "word" && !is_assignment_word(&child, source) {
+                        ranges.push((child.start_byte(), child.end_byte()));
+                        break;
+                    }
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            collect_command_name_ranges(&cursor.node(), source, ranges);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+}
+
+/// Check whether the cursor (given as a character offset from fish's
+/// `commandline --cursor`) is on a command-name position in the Fish command line.
+pub fn is_command_position(input: &str, cursor_char_pos: usize) -> bool {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_fish::language())
+        .expect("Error loading fish grammar");
+
+    let Some(tree) = parser.parse(input, None) else {
+        return false;
+    };
+
+    let mut ranges = Vec::new();
+    collect_command_name_ranges(&tree.root_node(), input.as_bytes(), &mut ranges);
+
+    // Convert character offset to byte offset.
+    let cursor_byte_pos = input
+        .char_indices()
+        .nth(cursor_char_pos)
+        .map(|(idx, _)| idx)
+        .unwrap_or(input.len());
+
+    ranges
+        .iter()
+        .any(|(start, end)| cursor_byte_pos > *start && cursor_byte_pos <= *end)
 }
 
 #[cfg(test)]
@@ -362,5 +449,78 @@ mod tests {
         // program name.  (The actual Korean→English conversion — e.g.
         // ㅛㅁ구 → yarn — is handled by the converter module.)
         assert_eq!(extract_program_names("ㅛㅁ구"), vec!["ㅛㅁ구"]);
+    }
+
+    // ── is_command_position tests ──
+
+    #[test]
+    fn test_command_position_simple_command() {
+        // "echo" with cursor at end → command position
+        assert!(is_command_position("echo", 4));
+    }
+
+    #[test]
+    fn test_command_position_argument() {
+        // "echo hello" with cursor after "hello" → NOT command position
+        assert!(!is_command_position("echo hello", 10));
+    }
+
+    #[test]
+    fn test_command_position_korean_command() {
+        // "ㅎ" with cursor after ㅎ → command position
+        assert!(is_command_position("ㅎ", 1));
+    }
+
+    #[test]
+    fn test_command_position_korean_argument() {
+        // "echo ㅎ" with cursor after ㅎ → NOT command position
+        assert!(!is_command_position("echo ㅎ", 6));
+    }
+
+    #[test]
+    fn test_command_position_after_semicolon() {
+        // "echo; ㅎ" with cursor after ㅎ → command position
+        assert!(is_command_position("echo; ㅎ", 7));
+    }
+
+    #[test]
+    fn test_command_position_after_and() {
+        // "echo && ㅎ" with cursor after ㅎ → command position
+        assert!(is_command_position("echo && ㅎ", 9));
+    }
+
+    #[test]
+    fn test_command_position_after_pipe() {
+        // "echo | ㅎ" with cursor after ㅎ → command position
+        assert!(is_command_position("echo | ㅎ", 8));
+    }
+
+    #[test]
+    fn test_command_position_env_var_prefix() {
+        // "VAR=x ㅎ" with cursor after ㅎ → command position
+        assert!(is_command_position("VAR=x ㅎ", 7));
+    }
+
+    #[test]
+    fn test_command_position_empty() {
+        assert!(!is_command_position("", 0));
+    }
+
+    #[test]
+    fn test_command_position_korean_multi_char() {
+        // "ㅔㅞㅡ" with cursor at end → command position
+        assert!(is_command_position("ㅔㅞㅡ", 3));
+    }
+
+    #[test]
+    fn test_command_position_pipe_second_cmd() {
+        // "echo hello | cat" with cursor after "cat" → command position
+        assert!(is_command_position("echo hello | cat", 16));
+    }
+
+    #[test]
+    fn test_command_position_second_argument() {
+        // "echo hello world" with cursor after "world" → NOT command position
+        assert!(!is_command_position("echo hello world", 16));
     }
 }
