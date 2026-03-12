@@ -1,252 +1,103 @@
 /// Fish shell command line parser for extracting program names.
 ///
-/// Parses a Fish command line and extracts the first non-assignment token
-/// from each command, properly handling Fish's quoting and escaping rules.
+/// Uses [tree-sitter-fish](https://github.com/ram02z/tree-sitter-fish) to parse
+/// Fish command lines and extract the program name from each command.
+
+use tree_sitter::{Node, Parser};
 
 /// Extract program names from a Fish shell command line.
 ///
 /// For each command separated by operators (`&&`, `||`, `|`, `;`, `&`, newlines),
 /// returns the first non-assignment token (the program name).
 ///
-/// Properly handles:
-/// - Fish single quotes: `'...'` with `\'` and `\\` escapes
-/// - Fish double quotes: `"..."` with `\"`, `\\`, `\$`, `\n` escapes
-/// - Backslash escaping outside quotes
+/// Uses the tree-sitter-fish grammar to correctly handle:
+/// - Quoting: single quotes, double quotes, escape sequences
+/// - Command separators: `&&`, `||`, `|`, `;`, `&`, newlines
 /// - Command substitution: `(...)` (nested correctly)
 /// - Environment variable assignments: `KEY=VALUE` prefixes are skipped
-/// - Comments: `#` to end of line
+/// - Comments
 pub fn extract_program_names(input: &str) -> Vec<String> {
-    let chars: Vec<char> = input.chars().collect();
-    let len = chars.len();
-    let mut pos = 0;
-    let mut result = Vec::new();
-    let mut looking_for_program = true;
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_fish::language())
+        .expect("Error loading fish grammar");
 
-    while pos < len {
-        let c = chars[pos];
+    let Some(tree) = parser.parse(input, None) else {
+        return Vec::new();
+    };
 
-        // Newlines are command separators
-        if c == '\n' {
-            looking_for_program = true;
-            pos += 1;
-            continue;
-        }
-
-        // Skip other whitespace
-        if c.is_ascii_whitespace() {
-            pos += 1;
-            continue;
-        }
-
-        // Comments: skip to end of line
-        if c == '#' {
-            while pos < len && chars[pos] != '\n' {
-                pos += 1;
-            }
-            continue;
-        }
-
-        // Command separators
-        if c == ';' {
-            looking_for_program = true;
-            pos += 1;
-            continue;
-        }
-        if c == '&' {
-            if pos + 1 < len && chars[pos + 1] == '&' {
-                pos += 2; // &&
-            } else {
-                pos += 1; // & (background)
-            }
-            looking_for_program = true;
-            continue;
-        }
-        if c == '|' {
-            if pos + 1 < len && chars[pos + 1] == '|' {
-                pos += 2; // ||
-            } else {
-                pos += 1; // | (pipe)
-            }
-            looking_for_program = true;
-            continue;
-        }
-
-        // Read a token
-        let (word, has_unquoted_eq, new_pos) = read_token(&chars, pos);
-        pos = new_pos;
-
-        if looking_for_program {
-            if has_unquoted_eq {
-                // Environment variable assignment, skip
-                continue;
-            }
-            if !word.is_empty() {
-                result.push(word);
-                looking_for_program = false;
-            }
-        }
-    }
-
-    result
+    let mut names = Vec::new();
+    collect_command_names(&tree.root_node(), input.as_bytes(), &mut names);
+    names
 }
 
-/// Read a single token from the character stream.
-///
-/// Returns `(unquoted_word, has_unquoted_equals, new_position)`.
-fn read_token(chars: &[char], start: usize) -> (String, bool, usize) {
-    let len = chars.len();
-    let mut pos = start;
-    let mut word = String::new();
-    let mut has_unquoted_equals = false;
-
-    while pos < len {
-        let c = chars[pos];
-
-        // Token boundary: whitespace or operator characters
-        if c.is_ascii_whitespace() || c == ';' || c == '#' || c == '&' || c == '|' {
-            break;
+/// Recursively walk the AST to find `command` nodes and extract their program names.
+fn collect_command_names(node: &Node, source: &[u8], names: &mut Vec<String>) {
+    if node.kind() == "command" {
+        if let Some(name) = get_program_name(node, source) {
+            names.push(name);
         }
-
-        match c {
-            // Fish single quotes: only \' and \\ are escape sequences
-            '\'' => {
-                pos += 1;
-                while pos < len && chars[pos] != '\'' {
-                    if chars[pos] == '\\'
-                        && pos + 1 < len
-                        && matches!(chars[pos + 1], '\'' | '\\')
-                    {
-                        word.push(chars[pos + 1]);
-                        pos += 2;
-                    } else {
-                        word.push(chars[pos]);
-                        pos += 1;
-                    }
-                }
-                if pos < len {
-                    pos += 1; // skip closing '
-                }
-            }
-
-            // Fish double quotes: \", \\, \$, \n are escape sequences
-            '"' => {
-                pos += 1;
-                while pos < len && chars[pos] != '"' {
-                    if chars[pos] == '\\' && pos + 1 < len {
-                        match chars[pos + 1] {
-                            '"' | '\\' | '$' => {
-                                word.push(chars[pos + 1]);
-                                pos += 2;
-                            }
-                            'n' => {
-                                word.push('\n');
-                                pos += 2;
-                            }
-                            _ => {
-                                word.push('\\');
-                                word.push(chars[pos + 1]);
-                                pos += 2;
-                            }
-                        }
-                    } else {
-                        word.push(chars[pos]);
-                        pos += 1;
-                    }
-                }
-                if pos < len {
-                    pos += 1; // skip closing "
-                }
-            }
-
-            // Command substitution: skip to matching ), tracking nesting
-            '(' => {
-                pos += 1;
-                let new_pos = skip_command_substitution(chars, pos);
-                // Include raw content (we can't evaluate the substitution)
-                for &ch in &chars[start..new_pos] {
-                    word.push(ch);
-                }
-                pos = new_pos;
-            }
-
-            // Backslash escape outside quotes
-            '\\' if pos + 1 < len => {
-                word.push(chars[pos + 1]);
-                pos += 2;
-            }
-
-            // Regular character
-            _ => {
-                if c == '=' {
-                    has_unquoted_equals = true;
-                }
-                word.push(c);
-                pos += 1;
+        return;
+    }
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            collect_command_names(&cursor.node(), source, names);
+            if !cursor.goto_next_sibling() {
+                break;
             }
         }
     }
-
-    (word, has_unquoted_equals, pos)
 }
 
-/// Skip past a command substitution `(...)`, handling nesting and quoting.
-///
-/// `start` should be the position right after the opening `(`.
-/// Returns the position right after the closing `)`.
-fn skip_command_substitution(chars: &[char], start: usize) -> usize {
-    let len = chars.len();
-    let mut pos = start;
-    let mut depth: u32 = 1;
+/// Check whether a node is a plain `word` containing `=` (i.e., a variable assignment).
+fn is_assignment_word(node: &Node, source: &[u8]) -> bool {
+    if node.kind() != "word" {
+        return false;
+    }
+    source[node.byte_range()].contains(&b'=')
+}
 
-    while pos < len && depth > 0 {
-        match chars[pos] {
-            '(' => {
-                depth += 1;
-                pos += 1;
+/// Extract the text content of a node, stripping surrounding quotes if it is a
+/// `single_quote_string` or `double_quote_string`.
+fn node_text_unquoted(node: &Node, source: &[u8]) -> String {
+    let text = String::from_utf8_lossy(&source[node.byte_range()]).to_string();
+    match node.kind() {
+        "single_quote_string" | "double_quote_string" => {
+            if text.len() >= 2 {
+                text[1..text.len() - 1].to_string()
+            } else {
+                text
             }
-            ')' => {
-                depth -= 1;
-                pos += 1;
-            }
-            '\'' => {
-                pos += 1;
-                while pos < len && chars[pos] != '\'' {
-                    if chars[pos] == '\\'
-                        && pos + 1 < len
-                        && matches!(chars[pos + 1], '\'' | '\\')
-                    {
-                        pos += 2;
-                    } else {
-                        pos += 1;
-                    }
-                }
-                if pos < len {
-                    pos += 1;
-                }
-            }
-            '"' => {
-                pos += 1;
-                while pos < len && chars[pos] != '"' {
-                    if chars[pos] == '\\' && pos + 1 < len {
-                        pos += 2;
-                    } else {
-                        pos += 1;
-                    }
-                }
-                if pos < len {
-                    pos += 1;
+        }
+        _ => text,
+    }
+}
+
+/// Get the program name from a `command` node, skipping any leading variable assignments.
+fn get_program_name(command_node: &Node, source: &[u8]) -> Option<String> {
+    // Check the `name` field (first token of the command)
+    if let Some(name_node) = command_node.child_by_field_name("name") {
+        if !is_assignment_word(&name_node, source) {
+            return Some(node_text_unquoted(&name_node, source));
+        }
+    }
+    // The `name` field was a variable assignment — look through `argument` fields
+    let mut cursor = command_node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            if cursor.field_name() == Some("argument") {
+                let child = cursor.node();
+                if !is_assignment_word(&child, source) {
+                    return Some(node_text_unquoted(&child, source));
                 }
             }
-            '\\' if pos + 1 < len => {
-                pos += 2;
-            }
-            _ => {
-                pos += 1;
+            if !cursor.goto_next_sibling() {
+                break;
             }
         }
     }
-
-    pos
+    None
 }
 
 #[cfg(test)]
