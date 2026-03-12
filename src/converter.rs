@@ -179,6 +179,7 @@ fn english_variants_for_jamo(jamo: char, map: &HashMap<char, &'static str>) -> V
 
 /// 한국어로 입력된 문자열을 영어 후보들로 변환
 /// - Shift 여부를 알 수 없는 음소에 대해서는 대소문자 후보를 모두 생성
+/// - 현재 매핑에서 한 자모는 최대 2개의 영문 키로만 확장되므로, 자모 하나당 후보 수는 최대 4개다.
 pub fn convert_korean_to_english_candidates(korean_input: &str) -> Vec<String> {
     let map = get_korean_to_english_map();
 
@@ -203,6 +204,7 @@ pub fn convert_korean_to_english_candidates(korean_input: &str) -> Vec<String> {
 /// 한국어로 입력된 문자열을 영어로 변환
 /// - 먼저 NFC 정규화를 수행하여 가능한 경우 완성형으로 결합
 /// - 이후 음절은 자모로 분해, 단일 자모는 그대로 두고 매핑으로 변환
+/// - Shift 여부가 모호한 경우에는 후보들 중 첫 번째(기존과 동일한 기본 소문자 경로)를 반환
 pub fn convert_korean_to_english(korean_input: &str) -> String {
     convert_korean_to_english_candidates(korean_input)
         .into_iter()
