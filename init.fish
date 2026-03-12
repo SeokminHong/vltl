@@ -13,24 +13,9 @@ function __vltl_check -S
 end
 
 function __vltl -S --on-event fish_preexec
-    # 명령어를 연산자(&&, ||, |, ;)로 분리
-    set -l commands (string replace -a -r '\s*(&&|\|\||[|;])\s*' \n -- $argv[1])
-    for cmd_line in $commands
-        set -l tokens (string split ' ' -- (string trim -- $cmd_line))
-        # 환경변수 지정 구문(KEY=VALUE) 건너뛰기
-        set -l program_name ""
-        for token in $tokens
-            if test -z "$token"
-                continue
-            end
-            if not string match -q '*=*' -- $token
-                set program_name $token
-                break
-            end
-        end
-        if test -z "$program_name"
-            continue
-        end
+    # fish 파서를 사용하여 명령어 이름 추출 (환경변수 지정, 연산자 등 자동 처리)
+    set -l program_names (printf '%s' $argv[1] | fish_indent --dump-parse-tree 2>&1 >/dev/null | string replace -rf ".*string: '(.+)'" '$1')
+    for program_name in $program_names
         if __vltl_check $program_name
             # Available
             continue
