@@ -28,15 +28,21 @@ cargo install vltl
    vltl init | source
    ```
 
-2. Try Korean typo
+2. Register your abbreviations as usual
 
-   ```
-   $ ㅔㅞㅡ --version
-   vltl: New alias (ㅔㅞㅡ -> pnpm)
-   10.5.0
+   ```fish
+   abbr -a L --position anywhere --set-cursor "% | less"
    ```
 
-https://github.com/user-attachments/assets/3118923a-edd9-4fc0-9688-ad3a0bee7a23
+3. Type Korean by mistake — vltl corrects it before `abbr` expands
+
+   When you type `cat foo.txt ㅣ` and press space:
+   - `ㅣ` is converted to `L`
+   - fish `expand-abbr` runs and expands `L` to `| less`
+   - The Korean trigger `ㅣ` is auto-registered as an abbr for next time
+   - On macOS, the IME switches to English
+
+   vltl binds `space`, `enter`, and `;` so that any Korean token is converted to its QWERTY equivalent before fish's native abbreviation expansion runs.
 
 ## Development
 
@@ -52,7 +58,7 @@ cargo test
 
 #### E2E Tests
 
-End-to-end tests verify the actual fish shell hook integration. To run them:
+End-to-end tests verify the fish shell abbr integration. To run them:
 
 1. Install fish shell:
    ```sh
@@ -74,13 +80,14 @@ End-to-end tests verify the actual fish shell hook integration. To run them:
    ```
 
 The e2e tests verify:
-- Fish hook installation and registration to `fish_preexec` event
-- Hook triggering when Korean commands are entered
-- Alias creation for Korean commands that map to existing commands
-- Alias execution works correctly
-- Hook behavior with non-existent commands
-- Hook behavior with already aliased commands
-- Full integration scenario from Korean input to alias creation
+- Function definitions after sourcing init (`__vltl_convert_and_expand`, `__vltl_auto_register_abbr`, etc.)
+- Korean-to-English conversion via `vltl convert`
+- Korean detection via `vltl has-korean`
+- Automatic abbr registration for Korean triggers
+- Preservation of abbr options (`--position anywhere`, `--set-cursor`, etc.)
+- No duplicate abbr registration
+- `VLTL_PATH` environment variable support
+- IME switching on macOS
 
 ### GitHub Actions
 

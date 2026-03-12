@@ -1,7 +1,7 @@
 #!/usr/bin/env fish
 
 # E2E test script for vltl
-# This script tests the actual fish hook integration and alias creation
+# This script tests the abbr-based fish integration
 
 set -g test_failed 0
 set -g test_passed 0
@@ -19,331 +19,271 @@ function print_test_result
     end
 end
 
-function test_hook_installation
+function test_function_definitions
     echo ""
-    echo "Testing fish hook installation..."
+    echo "Testing function definitions after sourcing init..."
 
     # Source the init script
     vltl init | source
 
-    # Test 1: Check if __vltl function is defined
-    if type -q __vltl
-        print_test_result "hook function __vltl is defined" 0
+    # Test: __vltl_convert_and_expand is defined
+    if type -q __vltl_convert_and_expand
+        print_test_result "function __vltl_convert_and_expand is defined" 0
     else
-        print_test_result "hook function __vltl is defined" 1
+        print_test_result "function __vltl_convert_and_expand is defined" 1
     end
 
-    # Test 2: Check if __vltl_check function is defined
-    if type -q __vltl_check
-        print_test_result "helper function __vltl_check is defined" 0
+    # Test: __vltl_auto_register_abbr is defined
+    if type -q __vltl_auto_register_abbr
+        print_test_result "function __vltl_auto_register_abbr is defined" 0
     else
-        print_test_result "helper function __vltl_check is defined" 1
+        print_test_result "function __vltl_auto_register_abbr is defined" 1
     end
 
-    # Test 3: Verify __vltl is hooked to fish_preexec event
-    set -l functions_output (functions __vltl)
-    if string match -q "*--on-event fish_preexec*" -- $functions_output
-        print_test_result "hook is registered to fish_preexec event" 0
+    # Test: __vltl_abbr_space is defined
+    if type -q __vltl_abbr_space
+        print_test_result "function __vltl_abbr_space is defined" 0
     else
-        print_test_result "hook is registered to fish_preexec event" 1
+        print_test_result "function __vltl_abbr_space is defined" 1
+    end
+
+    # Test: __vltl_abbr_enter is defined
+    if type -q __vltl_abbr_enter
+        print_test_result "function __vltl_abbr_enter is defined" 0
+    else
+        print_test_result "function __vltl_abbr_enter is defined" 1
+    end
+
+    # Test: __vltl_abbr_semicolon is defined
+    if type -q __vltl_abbr_semicolon
+        print_test_result "function __vltl_abbr_semicolon is defined" 0
+    else
+        print_test_result "function __vltl_abbr_semicolon is defined" 1
+    end
+
+    # Test: old alias-based functions should NOT be defined
+    if not type -q __vltl
+        print_test_result "old __vltl preexec function is not defined" 0
+    else
+        print_test_result "old __vltl preexec function is not defined" 1
+    end
+
+    if not type -q __vltl_check
+        print_test_result "old __vltl_check helper is not defined" 0
+    else
+        print_test_result "old __vltl_check helper is not defined" 1
     end
 end
 
-function test_preexec_hook_triggers
+function test_convert_command
     echo ""
-    echo "Testing fish_preexec hook triggering..."
+    echo "Testing vltl convert command..."
 
-    # Source the init script
-    vltl init | source
-
-    # Test 1: Trigger preexec with Korean command that converts to existing command
-    # We'll use 'ls' as it should exist, and test with Korean input that maps to 'ls': ㅣㄴ -> ls
-    set -l test_output (emit fish_preexec "ㅣㄴ" 2>&1)
-
-    # Check if alias was created (the hook should print a message)
-    if string match -q "*vltl: New alias*" -- $test_output
-        print_test_result "preexec hook triggers on Korean command" 0
+    # Test: Korean syllable conversion
+    set -l result (vltl convert "햣")
+    if test "$result" = git
+        print_test_result "convert: 햣 -> git" 0
     else
-        # It's ok if no alias is created if 'ls' doesn't map correctly
-        # The important thing is the hook doesn't error
-        print_test_result "preexec hook executes without error" 0
+        print_test_result "convert: 햣 -> git (got: $result)" 1
     end
 
-    # Test 2: Trigger preexec with non-Korean command (should not create alias)
-    set -l test_output2 (emit fish_preexec "echo test" 2>&1)
-    if not string match -q "*vltl: New alias*" -- $test_output2
-        print_test_result "preexec hook ignores non-Korean commands" 0
+    # Test: Korean jamo conversion
+    set -l result (vltl convert "ㅣ")
+    if test "$result" = l
+        print_test_result "convert: ㅣ -> l" 0
     else
-        print_test_result "preexec hook ignores non-Korean commands" 1
+        print_test_result "convert: ㅣ -> l (got: $result)" 1
+    end
+
+    # Test: Multi-character jamo conversion
+    set -l result (vltl convert "ㅔㅞㅡ")
+    if test "$result" = pnpm
+        print_test_result "convert: ㅔㅞㅡ -> pnpm" 0
+    else
+        print_test_result "convert: ㅔㅞㅡ -> pnpm (got: $result)" 1
+    end
+
+    # Test: Mixed syllable conversion
+    set -l result (vltl convert "ㅛㅁ구")
+    if test "$result" = yarn
+        print_test_result "convert: ㅛㅁ구 -> yarn" 0
+    else
+        print_test_result "convert: ㅛㅁ구 -> yarn (got: $result)" 1
     end
 end
 
-function test_alias_creation_for_echo
+function test_has_korean_command
     echo ""
-    echo "Testing alias creation with echo command..."
+    echo "Testing vltl has-korean command..."
 
-    # Source the init script
-    vltl init | source
-
-    # Korean input ㄷ초 should convert to echo (ㄷ->e, ㅊ->c, ㅗ->h, but we need proper mapping)
-    # Let's use what converts to 'echo': checking the converter
-    set -l korean_input ㄷ초
-    set -l converted (vltl convert "$korean_input")
-
-    # If it doesn't convert to echo, try to find what does
-    if test "$converted" != echo
-        # Try ㄷ초ㅗ
-        set korean_input ㄷ초ㅗ
-        set converted (vltl convert "$korean_input")
+    # Test: Korean syllable detected
+    if vltl has-korean "햣"
+        print_test_result "has-korean: detects Korean syllable" 0
+    else
+        print_test_result "has-korean: detects Korean syllable" 1
     end
 
-    # Emit the preexec event to trigger hook
-    set -l hook_output (emit fish_preexec "$korean_input test" 2>&1)
-
-    # Check if the hook tried to create an alias (even if echo already exists, it tests the flow)
-    if string match -q "*vltl: New alias*$korean_input*" -- $hook_output
-        print_test_result "hook attempts to create alias for existing command" 0
-
-        # Check if alias was actually created
-        if alias | grep -q "$korean_input"
-            print_test_result "alias is created in current session" 0
-        else
-            print_test_result "alias is created in current session" 1
-        end
+    # Test: Korean jamo detected
+    if vltl has-korean "ㅣ"
+        print_test_result "has-korean: detects Korean jamo" 0
     else
-        # The hook might not create alias if command already exists or other reasons
-        # This is expected behavior, so we mark as pass
-        print_test_result "hook correctly handles existing commands" 0
+        print_test_result "has-korean: detects Korean jamo" 1
+    end
+
+    # Test: English not detected as Korean
+    if not vltl has-korean "ls"
+        print_test_result "has-korean: English not detected as Korean" 0
+    else
+        print_test_result "has-korean: English not detected as Korean" 1
+    end
+
+    # Test: Empty string not detected as Korean
+    if not vltl has-korean ""
+        print_test_result "has-korean: empty string not detected as Korean" 0
+    else
+        print_test_result "has-korean: empty string not detected as Korean" 1
     end
 end
 
-function test_alias_execution
+function test_auto_register_abbr
     echo ""
-    echo "Testing alias execution..."
+    echo "Testing abbr auto-registration..."
 
     # Source the init script
     vltl init | source
 
-    # Create a test directory for our test
-    set -l test_dir (mktemp -d)
+    # Setup: register an English-trigger abbr
+    abbr -a -- testcmd_L 'echo expanded_L'
 
-    # Create a simple test script that acts as a fake command
-    echo '#!/bin/sh' >$test_dir/testcmd
-    echo 'echo "testcmd executed"' >>$test_dir/testcmd
-    chmod +x $test_dir/testcmd
+    # Test: auto-register Korean trigger for existing English abbr
+    __vltl_auto_register_abbr "ㅣ" testcmd_L
 
-    # Add test directory to PATH
-    set -x PATH $test_dir $PATH
-
-    # Find Korean that converts to 'testcmd'
-    # We need to work backwards: testcmd = 엳새챔 approximately
-    # But let's just test the mechanism with echo which we know exists
-
-    # Use a Korean command that will map to our test command
-    # Let's manually create an alias to test the concept
-    set -l korean_cmd 테스트
-    alias $korean_cmd="$test_dir/testcmd"
-
-    # Test if the alias works
-    set -l output (eval $korean_cmd 2>&1)
-    if string match -q "*testcmd executed*" -- $output
-        print_test_result "created alias executes correctly" 0
+    if abbr -q -- "ㅣ"
+        print_test_result "auto-register: Korean trigger abbr is created" 0
     else
-        print_test_result "created alias executes correctly" 1
+        print_test_result "auto-register: Korean trigger abbr is created" 1
     end
 
     # Cleanup
-    rm -rf $test_dir
+    abbr -e -- testcmd_L
+    abbr -e -- "ㅣ"
 end
 
-function test_hook_with_nonexistent_command
+function test_auto_register_preserves_options
     echo ""
-    echo "Testing hook behavior with non-existent commands..."
+    echo "Testing abbr auto-registration preserves options..."
 
     # Source the init script
     vltl init | source
 
-    # Test with Korean that converts to non-existent command
-    set -l korean_input ㅜㅐㄴㅌㄷㅌㅅㄱㅁㅁㅇㄴㅇ
-    set -l hook_output (emit fish_preexec "$korean_input" 2>&1)
+    # Setup: register an English-trigger abbr with --position anywhere
+    abbr -a --position anywhere -- testcmd_PA 'echo anywhere_test'
 
-    # Should not create alias for non-existent command
-    if not string match -q "*vltl: New alias*$korean_input*" -- $hook_output
-        print_test_result "hook does not create alias for non-existent command" 0
-    else
-        print_test_result "hook does not create alias for non-existent command" 1
-    end
-end
+    # Auto-register Korean trigger
+    __vltl_auto_register_abbr "ㅔㅁ" testcmd_PA
 
-function test_hook_with_existing_alias
-    echo ""
-    echo "Testing hook with already aliased command..."
+    if abbr -q -- "ㅔㅁ"
+        print_test_result "auto-register: preserves options (abbr created)" 0
 
-    # Source the init script
-    vltl init | source
-
-    # Create an alias first
-    set -l korean_cmd ㅅㅅㅅ
-    alias $korean_cmd="echo aliased"
-
-    # Now trigger the hook with the same Korean command
-    set -l hook_output (emit fish_preexec "$korean_cmd" 2>&1)
-
-    # The hook should detect the alias exists and not try to create it
-    # (returns early due to __vltl_check)
-    if not string match -q "*vltl: New alias*$korean_cmd*" -- $hook_output
-        print_test_result "hook skips already aliased commands" 0
-    else
-        print_test_result "hook skips already aliased commands" 1
-    end
-end
-
-function test_full_integration_scenario
-    echo ""
-    echo "Testing full integration scenario..."
-
-    # Source the init script in a clean state
-    vltl init | source
-
-    # Simulate what happens when user types a Korean command
-    # that maps to an existing command (ls)
-
-    # Step 1: Korean input should be detected
-    set -l korean_input ㅣㄴ
-    if vltl has-korean "$korean_input"
-        print_test_result "integration: Korean input is detected" 0
-    else
-        print_test_result "integration: Korean input is detected" 1
-    end
-
-    # Step 2: It should convert to English
-    set -l converted (vltl convert "$korean_input")
-    if test -n "$converted"
-        print_test_result "integration: Korean converts to English ($converted)" 0
-    else
-        print_test_result "integration: Korean converts to English" 1
-    end
-
-    # Step 3: Check if converted command exists
-    if type -q $converted
-        print_test_result "integration: converted command ($converted) exists" 0
-
-        # Step 4: Trigger the hook
-        set -l hook_output (emit fish_preexec "$korean_input" 2>&1)
-
-        # Step 5: Verify alias creation message
-        if string match -q "*vltl: New alias*" -- $hook_output
-            print_test_result "integration: alias creation message displayed" 0
+        # Check that the definition includes --position anywhere
+        set -l def (abbr --show | string match -- "*ㅔㅁ*")
+        if string match -q "*--position anywhere*" -- $def
+            print_test_result "auto-register: --position anywhere is preserved" 0
         else
-            # Hook might skip if conditions aren't met
-            print_test_result "integration: hook executes successfully" 0
+            print_test_result "auto-register: --position anywhere is preserved" 1
         end
     else
-        # If converted command doesn't exist, hook should not create alias
-        set -l hook_output (emit fish_preexec "$korean_input" 2>&1)
-        if not string match -q "*vltl: New alias*" -- $hook_output
-            print_test_result "integration: no alias for non-existent command" 0
+        print_test_result "auto-register: preserves options (abbr created)" 1
+    end
+
+    # Cleanup
+    abbr -e -- testcmd_PA
+    abbr -e -- "ㅔㅁ"
+end
+
+function test_auto_register_no_duplicate
+    echo ""
+    echo "Testing abbr auto-registration does not duplicate..."
+
+    # Source the init script
+    vltl init | source
+
+    # Setup: register English-trigger abbr and manually create Korean one
+    abbr -a -- testcmd_ND 'echo no_dup'
+    abbr -a -- "ㄴㄷ" 'echo already_exists'
+
+    # Try to auto-register - should not overwrite
+    __vltl_auto_register_abbr "ㄴㄷ" testcmd_ND
+
+    # Verify the existing Korean abbr is unchanged
+    set -l def (abbr --show | string match -- "*ㄴㄷ*")
+    if string match -q "*already_exists*" -- $def
+        print_test_result "auto-register: does not overwrite existing Korean abbr" 0
+    else
+        print_test_result "auto-register: does not overwrite existing Korean abbr" 1
+    end
+
+    # Cleanup
+    abbr -e -- testcmd_ND
+    abbr -e -- "ㄴㄷ"
+end
+
+function test_auto_register_with_set_cursor
+    echo ""
+    echo "Testing abbr auto-registration with --set-cursor..."
+
+    # Source the init script
+    vltl init | source
+
+    # Setup: register abbr with --set-cursor
+    abbr -a --position anywhere --set-cursor -- testcmd_SC '% | less'
+
+    # Auto-register Korean trigger
+    __vltl_auto_register_abbr "ㅅㅊ" testcmd_SC
+
+    if abbr -q -- "ㅅㅊ"
+        set -l def (abbr --show | string match -- "*ㅅㅊ*")
+        if string match -q "*--set-cursor*" -- $def
+            print_test_result "auto-register: --set-cursor is preserved" 0
         else
-            print_test_result "integration: no alias for non-existent command" 1
+            print_test_result "auto-register: --set-cursor is preserved" 1
         end
-    end
-end
-
-function test_env_var_assignment_skipped
-    echo ""
-    echo "Testing env var assignment syntax is skipped..."
-
-    # Source the init script
-    vltl init | source
-
-    # Test: 변수=all echo hello should NOT trigger alias for 변수=all
-    set -l hook_output (emit fish_preexec "변수=all echo hello" 2>&1)
-    if not string match -q "*vltl: New alias*변수*" -- $hook_output
-        print_test_result "env var assignment syntax is skipped" 0
-    else
-        print_test_result "env var assignment syntax is skipped" 1
-    end
-
-    # Test: multiple env vars like KEY1=val1 KEY2=val2 echo hello
-    set -l hook_output2 (emit fish_preexec "변수=all 변수2=test echo hello" 2>&1)
-    if not string match -q "*vltl: New alias*변수*" -- $hook_output2
-        print_test_result "multiple env var assignments are skipped" 0
-    else
-        print_test_result "multiple env var assignments are skipped" 1
-    end
-end
-
-function test_and_operator_support
-    echo ""
-    echo "Testing && operator support..."
-
-    # Source the init script
-    vltl init | source
-
-    # Test: echo hello && ㅣㄴ should process ㅣㄴ (after &&)
-    set -l korean_input ㅣㄴ
-    set -l converted (vltl convert "$korean_input")
-
-    if type -q $converted
-        set -l hook_output (emit fish_preexec "echo hello && $korean_input" 2>&1)
-        if string match -q "*vltl: New alias*$korean_input*$converted*" -- $hook_output
-            print_test_result "&& operator: Korean command after && is processed" 0
+        if string match -q "*--position anywhere*" -- $def
+            print_test_result "auto-register: --position anywhere is preserved with --set-cursor" 0
         else
-            # Hook might skip if conditions aren't met
-            print_test_result "&& operator: hook executes without error" 0
+            print_test_result "auto-register: --position anywhere is preserved with --set-cursor" 1
         end
     else
-        print_test_result "&& operator: skipped (converted command '$converted' not found)" 0
+        print_test_result "auto-register: --set-cursor is preserved" 1
     end
-end
 
-function test_pipe_operator_support
-    echo ""
-    echo "Testing pipe operator support..."
-
-    # Source the init script
-    vltl init | source
-
-    # Test: pipe should not cause errors
-    set -l hook_output (emit fish_preexec "echo hello | cat" 2>&1)
-    # Non-Korean commands should not trigger alias
-    if not string match -q "*vltl: New alias*" -- $hook_output
-        print_test_result "pipe operator: non-Korean commands handled correctly" 0
-    else
-        print_test_result "pipe operator: non-Korean commands handled correctly" 1
-    end
+    # Cleanup
+    abbr -e -- testcmd_SC
+    abbr -e -- "ㅅㅊ"
 end
 
 function test_vltl_path_env_var
     echo ""
     echo "Testing VLTL_PATH environment variable support..."
 
-    # Test 1: When VLTL_PATH is set, hook should use the specified binary
+    # Test 1: VLTL_PATH is used by __vltl_convert_and_expand
     set -l vltl_bin (which vltl)
     set -gx VLTL_PATH $vltl_bin
     vltl init | source
 
-    # Trigger preexec with Korean command
-    set -l korean_input ㅣㄴ
-    set -l converted (vltl convert "$korean_input")
-
-    if type -q $converted
-        set -l hook_output (emit fish_preexec "$korean_input" 2>&1)
-        # Hook should work correctly with VLTL_PATH
-        print_test_result "VLTL_PATH: hook works with custom vltl path" 0
+    # Verify function definitions still work with VLTL_PATH
+    if type -q __vltl_convert_and_expand
+        print_test_result "VLTL_PATH: functions defined with custom path" 0
     else
-        print_test_result "VLTL_PATH: skipped (converted command '$converted' not found)" 0
+        print_test_result "VLTL_PATH: functions defined with custom path" 1
     end
 
-    # Test 2: When VLTL_PATH points to invalid path, hook should fail gracefully
-    set -gx VLTL_PATH /nonexistent/path/vltl
-    vltl init | source
-    set -l hook_output2 (emit fish_preexec "ㅣㄴ" 2>&1)
-    # Should not create alias since the binary doesn't exist
-    if not string match -q "*vltl: New alias*" -- $hook_output2
-        print_test_result "VLTL_PATH: invalid path does not create alias" 0
+    # Test 2: vltl convert still works (binary command, independent of VLTL_PATH)
+    set -l converted (vltl convert "ㅣ")
+    if test "$converted" = l
+        print_test_result "VLTL_PATH: vltl convert works correctly" 0
     else
-        print_test_result "VLTL_PATH: invalid path does not create alias" 1
+        print_test_result "VLTL_PATH: vltl convert works correctly" 1
     end
 
     # Cleanup
@@ -366,7 +306,6 @@ function test_switch_to_english_command
         end
 
         # Test 2: Command should execute without error (even if IME doesn't change)
-        # We can't really test if IME changes, but we can test that the command runs
         if vltl switch-to-english 2>&1 | grep -qv "error: unrecognized subcommand"
             print_test_result "switch-to-english command executes on macOS" 0
         else
@@ -392,24 +331,84 @@ function test_switch_to_english_command
     end
 end
 
+function test_extract_programs_command
+    echo ""
+    echo "Testing vltl extract-programs command..."
+
+    # Test: Simple command extraction
+    set -l result (vltl extract-programs -- "ls -la")
+    if test "$result" = ls
+        print_test_result "extract-programs: simple command" 0
+    else
+        print_test_result "extract-programs: simple command (got: $result)" 1
+    end
+
+    # Test: Korean command extraction
+    set -l result (vltl extract-programs -- "ㅣㄴ -la")
+    if test "$result" = "ㅣㄴ"
+        print_test_result "extract-programs: Korean command" 0
+    else
+        print_test_result "extract-programs: Korean command (got: $result)" 1
+    end
+end
+
+function test_integration_convert_flow
+    echo ""
+    echo "Testing integration conversion flow..."
+
+    # Source the init script
+    vltl init | source
+
+    # Test the full conversion pipeline:
+    # 1. Korean input detected
+    # 2. Converted to English
+    # 3. Can be used as abbr trigger
+
+    # Setup: register an abbr for the converted result
+    set -l korean_input "햣"
+    set -l expected_english "git"
+    set -l converted (vltl convert "$korean_input")
+
+    if test "$converted" = "$expected_english"
+        print_test_result "integration: 햣 correctly converts to git" 0
+    else
+        print_test_result "integration: 햣 correctly converts to git (got: $converted)" 1
+    end
+
+    # Register abbr for the English trigger
+    abbr -a -- "$expected_english" "git status"
+
+    # The auto-register should create a Korean trigger abbr
+    __vltl_auto_register_abbr "$korean_input" "$expected_english"
+
+    if abbr -q -- "$korean_input"
+        print_test_result "integration: Korean abbr auto-registered for converted trigger" 0
+    else
+        print_test_result "integration: Korean abbr auto-registered for converted trigger" 1
+    end
+
+    # Cleanup
+    abbr -e -- "$expected_english"
+    abbr -e -- "$korean_input"
+end
+
 # Run all tests
 echo "========================================"
 echo "Running vltl E2E Tests"
-echo "Fish Hook Integration Tests"
+echo "Fish Abbr Integration Tests"
 echo "========================================"
 
-test_hook_installation
-test_preexec_hook_triggers
-test_alias_creation_for_echo
-test_alias_execution
-test_hook_with_nonexistent_command
-test_hook_with_existing_alias
-test_full_integration_scenario
-test_env_var_assignment_skipped
-test_and_operator_support
-test_pipe_operator_support
+test_function_definitions
+test_convert_command
+test_has_korean_command
+test_auto_register_abbr
+test_auto_register_preserves_options
+test_auto_register_no_duplicate
+test_auto_register_with_set_cursor
 test_vltl_path_env_var
 test_switch_to_english_command
+test_extract_programs_command
+test_integration_convert_flow
 
 # Print summary
 echo ""
