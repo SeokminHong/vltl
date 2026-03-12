@@ -13,8 +13,8 @@ function __vltl_check -S
 end
 
 function __vltl -S --on-event fish_preexec
-    # fish 파서를 사용하여 명령어 이름 추출 (환경변수 지정, 연산자 등 자동 처리)
-    set -l program_names (printf '%s' $argv[1] | fish_indent --dump-parse-tree 2>&1 >/dev/null | string replace -rf ".*string: '([^']+)'" '$1')
+    # 명령어 이름 추출 (환경변수 지정, 연산자, 따옴표 등 자동 처리)
+    set -l program_names (vltl extract-programs -- "$argv[1]")
     for program_name in $program_names
         if __vltl_check $program_name
             # Available
