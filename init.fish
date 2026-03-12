@@ -33,7 +33,9 @@ function __vltl_auto_register_abbr
     end
 
     # 영어 트리거의 abbr 정의를 찾아 한글 트리거로 복제
+    # abbr --show 출력은 eval로 재실행 가능한 형식이므로 트리거만 교체하여 재실행
     for def in (abbr --show)
+        # ' -- ' 기준으로 분리하여 트리거 위치 확인
         set -l parts (string split ' -- ' "$def")
         if test (count $parts) -lt 2
             continue
@@ -41,7 +43,9 @@ function __vltl_auto_register_abbr
         set -l after_separator $parts[2]
         set -l trigger_in_def (string split ' ' "$after_separator")[1]
         if test "$trigger_in_def" = "$english_trigger"
-            set -l new_def (string replace -- "-- $english_trigger " "-- $korean_trigger " "$def")
+            # 트리거를 escape하여 eval 시 셸 메타문자 해석 방지
+            set -l escaped_korean (string escape -- "$korean_trigger")
+            set -l new_def (string replace -- "-- $english_trigger " "-- $escaped_korean " "$def")
             eval $new_def
             return
         end
