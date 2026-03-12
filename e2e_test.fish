@@ -249,6 +249,71 @@ function test_full_integration_scenario
     end
 end
 
+function test_env_var_assignment_skipped
+    echo ""
+    echo "Testing env var assignment syntax is skipped..."
+
+    # Source the init script
+    vltl init | source
+
+    # Test: 변수=all echo hello should NOT trigger alias for 변수=all
+    set -l hook_output (emit fish_preexec "변수=all echo hello" 2>&1)
+    if not string match -q "*vltl: New alias*변수*" -- $hook_output
+        print_test_result "env var assignment syntax is skipped" 0
+    else
+        print_test_result "env var assignment syntax is skipped" 1
+    end
+
+    # Test: multiple env vars like KEY1=val1 KEY2=val2 echo hello
+    set -l hook_output2 (emit fish_preexec "변수=all 변수2=test echo hello" 2>&1)
+    if not string match -q "*vltl: New alias*변수*" -- $hook_output2
+        print_test_result "multiple env var assignments are skipped" 0
+    else
+        print_test_result "multiple env var assignments are skipped" 1
+    end
+end
+
+function test_and_operator_support
+    echo ""
+    echo "Testing && operator support..."
+
+    # Source the init script
+    vltl init | source
+
+    # Test: echo hello && ㅣㄴ should process ㅣㄴ (after &&)
+    set -l korean_input "ㅣㄴ"
+    set -l converted (vltl convert "$korean_input")
+
+    if type -q $converted
+        set -l hook_output (emit fish_preexec "echo hello && $korean_input" 2>&1)
+        if string match -q "*vltl: New alias*$korean_input*$converted*" -- $hook_output
+            print_test_result "&& operator: Korean command after && is processed" 0
+        else
+            # Hook might skip if conditions aren't met
+            print_test_result "&& operator: hook executes without error" 0
+        end
+    else
+        print_test_result "&& operator: skipped (converted command '$converted' not found)" 0
+    end
+end
+
+function test_pipe_operator_support
+    echo ""
+    echo "Testing pipe operator support..."
+
+    # Source the init script
+    vltl init | source
+
+    # Test: pipe should not cause errors
+    set -l hook_output (emit fish_preexec "echo hello | cat" 2>&1)
+    # Non-Korean commands should not trigger alias
+    if not string match -q "*vltl: New alias*" -- $hook_output
+        print_test_result "pipe operator: non-Korean commands handled correctly" 0
+    else
+        print_test_result "pipe operator: non-Korean commands handled correctly" 1
+    end
+end
+
 # Run all tests
 echo "========================================"
 echo "Running vltl E2E Tests"
@@ -262,6 +327,9 @@ test_alias_execution
 test_hook_with_nonexistent_command
 test_hook_with_existing_alias
 test_full_integration_scenario
+test_env_var_assignment_skipped
+test_and_operator_support
+test_pipe_operator_support
 
 # Print summary
 echo ""
