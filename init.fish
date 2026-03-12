@@ -14,10 +14,9 @@ end
 
 function __vltl -S --on-event fish_preexec
     # $VLTL_PATH가 설정되어 있으면 해당 경로의 vltl을 사용, 아니면 PATH의 vltl 사용
+    set -l __vltl_bin vltl
     if set -q VLTL_PATH
-        set -l __vltl_bin $VLTL_PATH
-    else
-        set -l __vltl_bin vltl
+        set __vltl_bin $VLTL_PATH
     end
     # 명령어 이름 추출 (환경변수 지정, 연산자, 따옴표 등 자동 처리)
     set -l program_names ($__vltl_bin extract-programs -- "$argv[1]")
