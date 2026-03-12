@@ -1,4 +1,5 @@
 mod converter;
+mod fish_parser;
 #[cfg(target_os = "macos")]
 mod ime;
 
@@ -23,6 +24,10 @@ enum Commands {
     /// 문자열에 한국어가 포함되어 있는지 확인 (exit code 0: 포함, 1: 미포함)
     HasKorean {
         word: String,
+    },
+    /// Fish 명령어 줄에서 프로그램 이름을 추출
+    ExtractPrograms {
+        command_line: String,
     },
     #[cfg(target_os = "macos")]
     /// IME를 영어로 전환
@@ -49,6 +54,12 @@ fn main() {
                 process::exit(0);
             } else {
                 process::exit(1);
+            }
+        }
+        Commands::ExtractPrograms { command_line } => {
+            let names = fish_parser::extract_program_names(&command_line);
+            for name in names {
+                println!("{}", name);
             }
         }
         #[cfg(target_os = "macos")]
