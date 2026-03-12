@@ -7,7 +7,7 @@ function __vltl_convert_and_expand
         set __vltl_bin $VLTL_PATH
     end
 
-    if test -n "$token"; and $__vltl_bin has-korean "$token"
+    if test -n "$token"; and $__vltl_bin has-korean -- "$token"
         # 커서가 명령어 이름 위치에 있는지 AST로 확인
         set -l cmdline (commandline)
         set -l cursor_pos (commandline --cursor)
@@ -15,7 +15,7 @@ function __vltl_convert_and_expand
             return
         end
 
-        set -l converted ($__vltl_bin convert "$token")
+        set -l converted ($__vltl_bin convert -- "$token")
         if test -n "$converted"; and test "$converted" != "$token"
             commandline --current-token --replace -- "$converted"
 

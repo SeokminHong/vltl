@@ -143,6 +143,21 @@ function test_has_korean_command
     else
         print_test_result "has-korean: empty string not detected as Korean" 1
     end
+
+    # Test: Dash-prefixed token should not cause error (issue: cargo --build)
+    set -l err (vltl has-korean -- "--build" 2>&1 >/dev/null)
+    if test $status -eq 1; and test -z "$err"
+        print_test_result "has-korean: --build handled without error" 0
+    else
+        print_test_result "has-korean: --build handled without error (status: $status, err: $err)" 1
+    end
+
+    # Test: Dash-prefixed token with Korean should be detected
+    if vltl has-korean -- "--빌드"
+        print_test_result "has-korean: --빌드 detected as Korean" 0
+    else
+        print_test_result "has-korean: --빌드 detected as Korean" 1
+    end
 end
 
 function test_auto_register_abbr
