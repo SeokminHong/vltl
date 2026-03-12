@@ -34,7 +34,7 @@ function __vltl -S --on-event fish_preexec
         # Register alias
         alias $program_name=$eng_name #<kor -> eng command>
         echo "vltl: New alias ($program_name -> $eng_name)"
-        # Switch IME to English
-        vltl switch-to-english
+        # Switch IME to English (only available on macOS)
+        vltl switch-to-english 2>/dev/null
     end
 end
