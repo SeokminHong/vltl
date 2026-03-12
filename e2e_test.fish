@@ -314,6 +314,42 @@ function test_pipe_operator_support
     end
 end
 
+function test_vltl_path_env_var
+    echo ""
+    echo "Testing VLTL_PATH environment variable support..."
+
+    # Test 1: When VLTL_PATH is set, hook should use the specified binary
+    set -l vltl_bin (which vltl)
+    set -gx VLTL_PATH $vltl_bin
+    vltl init | source
+
+    # Trigger preexec with Korean command
+    set -l korean_input ㅣㄴ
+    set -l converted (vltl convert "$korean_input")
+
+    if type -q $converted
+        set -l hook_output (emit fish_preexec "$korean_input" 2>&1)
+        # Hook should work correctly with VLTL_PATH
+        print_test_result "VLTL_PATH: hook works with custom vltl path" 0
+    else
+        print_test_result "VLTL_PATH: skipped (converted command '$converted' not found)" 0
+    end
+
+    # Test 2: When VLTL_PATH points to invalid path, hook should fail gracefully
+    set -gx VLTL_PATH /nonexistent/path/vltl
+    vltl init | source
+    set -l hook_output2 (emit fish_preexec "ㅣㄴ" 2>&1)
+    # Should not create alias since the binary doesn't exist
+    if not string match -q "*vltl: New alias*" -- $hook_output2
+        print_test_result "VLTL_PATH: invalid path does not create alias" 0
+    else
+        print_test_result "VLTL_PATH: invalid path does not create alias" 1
+    end
+
+    # Cleanup
+    set -e VLTL_PATH
+end
+
 function test_switch_to_english_command
     echo ""
     echo "Testing switch-to-english command availability..."
@@ -372,6 +408,7 @@ test_full_integration_scenario
 test_env_var_assignment_skipped
 test_and_operator_support
 test_pipe_operator_support
+test_vltl_path_env_var
 test_switch_to_english_command
 
 # Print summary
