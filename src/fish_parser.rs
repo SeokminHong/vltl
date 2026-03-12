@@ -32,6 +32,11 @@ pub fn extract_program_names(input: &str) -> Vec<String> {
 }
 
 /// Recursively walk the AST to find `command` nodes and extract their program names.
+///
+/// When tree-sitter-fish cannot fully parse a command (e.g. a single word with
+/// no arguments), the grammar wraps the tokens in an `ERROR` node instead of a
+/// `command` node.  In that case we fall back to treating the first
+/// non-assignment `word` child of the `ERROR` node as the program name.
 fn collect_command_names(node: &Node, source: &[u8], names: &mut Vec<String>) {
     if node.kind() == "command" {
         if let Some(name) = get_program_name(node, source) {
@@ -39,6 +44,57 @@ fn collect_command_names(node: &Node, source: &[u8], names: &mut Vec<String>) {
         }
         return;
     }
+
+    // Handle ERROR nodes that contain bare words but no command children.
+    if node.is_error() {
+        let has_command_child = {
+            let mut cursor = node.walk();
+            let mut found = false;
+            if cursor.goto_first_child() {
+                loop {
+                    if cursor.node().kind() == "command" {
+                        found = true;
+                        break;
+                    }
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+            found
+        };
+
+        if has_command_child {
+            // Recurse normally to pick up the nested command(s).
+            let mut cursor = node.walk();
+            if cursor.goto_first_child() {
+                loop {
+                    collect_command_names(&cursor.node(), source, names);
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            // No command child — treat the first non-assignment word as the
+            // program name.
+            let mut cursor = node.walk();
+            if cursor.goto_first_child() {
+                loop {
+                    let child = cursor.node();
+                    if child.kind() == "word" && !is_assignment_word(&child, source) {
+                        names.push(node_text_unquoted(&child, source));
+                        break;
+                    }
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
     let mut cursor = node.walk();
     if cursor.goto_first_child() {
         loop {
@@ -302,49 +358,9 @@ mod tests {
 
     #[test]
     fn test_single_korean_command_no_args() {
-        // ㅛㅁ구 should be extracted as a program name (converts to "yarn")
+        // Single Korean word without arguments should still be extracted as a
+        // program name.  (The actual Korean→English conversion — e.g.
+        // ㅛㅁ구 → yarn — is handled by the converter module.)
         assert_eq!(extract_program_names("ㅛㅁ구"), vec!["ㅛㅁ구"]);
-    }
-
-    #[test]
-    fn debug_tree_structure() {
-        let mut parser = Parser::new();
-        parser
-            .set_language(&tree_sitter_fish::language())
-            .expect("Error loading fish grammar");
-
-        for input in &["ㅛㅁ구", "yarn", "ㅛㅁ구 test", "ㅣㄴ -la"] {
-            let tree = parser.parse(input, None).unwrap();
-            eprintln!("\n=== Input: {:?} ===", input);
-            debug_node(&tree.root_node(), input.as_bytes(), 0);
-        }
-    }
-}
-
-fn debug_node(node: &Node, source: &[u8], indent: usize) {
-    let text = String::from_utf8_lossy(&source[node.byte_range()]);
-    let field = "";
-    eprintln!(
-        "{:indent$}{} [kind={}, named={}, field_count={}] = {:?}",
-        "",
-        node.kind(),
-        node.kind_id(),
-        node.is_named(),
-        node.child_count(),
-        text,
-        indent = indent
-    );
-    let mut cursor = node.walk();
-    if cursor.goto_first_child() {
-        loop {
-            let f = cursor.field_name().unwrap_or("");
-            if !f.is_empty() {
-                eprint!("{:indent$}  (field={}): ", "", f, indent = indent);
-            }
-            debug_node(&cursor.node(), source, indent + 2);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
     }
 }
