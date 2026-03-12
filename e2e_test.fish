@@ -112,6 +112,27 @@ function test_convert_command
     end
 end
 
+function test_convert_candidates_command
+    echo ""
+    echo "Testing vltl convert-candidates command..."
+
+    # Test: ambiguous jamo should include lowercase and uppercase candidates
+    set -l result (vltl convert-candidates "ㅣ")
+    if test (count $result) -eq 2; and contains -- l $result; and contains -- L $result
+        print_test_result "convert-candidates: ㅣ -> l, L" 0
+    else
+        print_test_result "convert-candidates: ㅣ -> l, L (got: $result)" 1
+    end
+
+    # Test: fixed shift jamo should not create extra candidates
+    set -l result (vltl convert-candidates "ㄸ")
+    if test (count $result) -eq 1; and test "$result[1]" = E
+        print_test_result "convert-candidates: ㄸ -> E only" 0
+    else
+        print_test_result "convert-candidates: ㄸ -> E only (got: $result)" 1
+    end
+end
+
 function test_has_korean_command
     echo ""
     echo "Testing vltl has-korean command..."
@@ -504,6 +525,7 @@ echo "========================================"
 
 test_function_definitions
 test_convert_command
+test_convert_candidates_command
 test_has_korean_command
 test_auto_register_abbr
 test_auto_register_preserves_options
