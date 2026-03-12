@@ -26,35 +26,9 @@ jobs:
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Get current version
-        id: current
-        run: |
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Calculate new version
+      - name: Bump version
         id: new
-        run: |
-          IFS='.' read -r MAJOR MINOR PATCH <<< "${{ steps.current.outputs.version }}"
-          case "${{ inputs.bump }}" in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
-          esac
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Update version in Cargo.toml
-        run: sed -i "s/^version = \".*\"/version = \"${{ steps.new.outputs.version }}\"/" Cargo.toml
+        run: node .github/scripts/bump-version.mjs "${{ inputs.bump }}"
 
       - name: Update Cargo.lock
         run: cargo generate-lockfile
