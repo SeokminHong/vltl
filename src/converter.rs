@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
 /// 한국어 키보드로 잘못 입력된 명령어를 영어로 변환하는 매핑
-fn get_korean_to_english_map() -> HashMap<char, &'static str> {
+static KOREAN_TO_ENGLISH_MAP: LazyLock<HashMap<char, &'static str>> = LazyLock::new(|| {
     let mut map: HashMap<char, &'static str> = HashMap::new();
 
     // 자음
@@ -53,8 +54,21 @@ fn get_korean_to_english_map() -> HashMap<char, &'static str> {
     map.insert('ㅟ', "nl"); // ㅜ+ㅣ
     map.insert('ㅢ', "ml"); // ㅡ+ㅣ
 
+    // 겹받침 (compound final consonants)
+    map.insert('ㄳ', "rt"); // ㄱ+ㅅ
+    map.insert('ㄵ', "sw"); // ㄴ+ㅈ
+    map.insert('ㄶ', "sg"); // ㄴ+ㅎ
+    map.insert('ㄺ', "fr"); // ㄹ+ㄱ
+    map.insert('ㄻ', "fa"); // ㄹ+ㅁ
+    map.insert('ㄼ', "fq"); // ㄹ+ㅂ
+    map.insert('ㄽ', "ft"); // ㄹ+ㅅ
+    map.insert('ㄾ', "fx"); // ㄹ+ㅌ
+    map.insert('ㄿ', "fv"); // ㄹ+ㅍ
+    map.insert('ㅀ', "fg"); // ㄹ+ㅎ
+    map.insert('ㅄ', "qt"); // ㅂ+ㅅ
+
     map
-}
+});
 
 /// 한글 완성형 문자를 자모로 분해
 fn decompose_hangul(ch: char) -> Vec<char> {
@@ -126,7 +140,7 @@ pub fn contains_korean(input: &str) -> bool {
 /// - 먼저 NFC 정규화를 수행하여 가능한 경우 완성형으로 결합
 /// - 이후 음절은 자모로 분해, 단일 자모는 그대로 두고 매핑으로 변환
 pub fn convert_korean_to_english(korean_input: &str) -> String {
-    let map = get_korean_to_english_map();
+    let map = &*KOREAN_TO_ENGLISH_MAP;
 
     // NFC 정규화로 NFD 입력을 최대한 완성형으로 결합
     let normalized: String = korean_input.nfc().collect();
@@ -200,5 +214,21 @@ mod tests {
         assert!(!contains_korean(""));
         assert!(!contains_korean("123"));
         assert!(!contains_korean("!@#$"));
+    }
+
+    #[test]
+    fn test_compound_jongsung() {
+        // 겹받침이 포함된 음절들의 변환 테스트
+        assert_eq!(convert_korean_to_english("없"), "djqt"); // ㅇ+ㅓ+ㅂㅅ
+        assert_eq!(convert_korean_to_english("닭"), "ekfr"); // ㄷ+ㅏ+ㄹㄱ
+        assert_eq!(convert_korean_to_english("읽"), "dlfr"); // ㅇ+ㅣ+ㄹㄱ
+        assert_eq!(convert_korean_to_english("삶"), "tkfa"); // ㅅ+ㅏ+ㄹㅁ
+        assert_eq!(convert_korean_to_english("값"), "rkqt"); // ㄱ+ㅏ+ㅂㅅ
+        assert_eq!(convert_korean_to_english("넓"), "sjfq"); // ㄴ+ㅓ+ㄹㅂ
+        assert_eq!(convert_korean_to_english("앉"), "dksw"); // ㅇ+ㅏ+ㄴㅈ
+        assert_eq!(convert_korean_to_english("않"), "dksg"); // ㅇ+ㅏ+ㄴㅎ
+        assert_eq!(convert_korean_to_english("잃"), "dlfg"); // ㅇ+ㅣ+ㄹㅎ
+        assert_eq!(convert_korean_to_english("핥"), "gkfx"); // ㅎ+ㅏ+ㄹㅌ
+        assert_eq!(convert_korean_to_english("읊"), "dmfv"); // ㅇ+ㅡ+ㄹㅍ
     }
 }
