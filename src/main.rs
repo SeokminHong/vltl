@@ -21,6 +21,10 @@ enum Commands {
     Convert {
         word: String,
     },
+    /// 한국어로 입력된 명령어를 영어 후보들로 변환
+    ConvertCandidates {
+        word: String,
+    },
     /// 문자열에 한국어가 포함되어 있는지 확인 (exit code 0: 포함, 1: 미포함)
     HasKorean {
         word: String,
@@ -52,6 +56,11 @@ fn main() {
         Commands::Convert { word } => {
             let converted = converter::convert_korean_to_english(&word);
             println!("{}", converted);
+        }
+        Commands::ConvertCandidates { word } => {
+            for candidate in converter::convert_korean_to_english_candidates(&word) {
+                println!("{}", candidate);
+            }
         }
         Commands::HasKorean { word } => {
             // 한국어가 포함되어 있으면 exit code 0, 아니면 1

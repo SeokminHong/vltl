@@ -122,27 +122,92 @@ pub fn contains_korean(input: &str) -> bool {
     })
 }
 
-/// 한국어로 입력된 문자열을 영어로 변환
-/// - 먼저 NFC 정규화를 수행하여 가능한 경우 완성형으로 결합
-/// - 이후 음절은 자모로 분해, 단일 자모는 그대로 두고 매핑으로 변환
-pub fn convert_korean_to_english(korean_input: &str) -> String {
+fn is_shift_ambiguous_jamo(jamo: char) -> bool {
+    matches!(
+        jamo,
+        'ㅛ' | 'ㅕ'
+            | 'ㅑ'
+            | 'ㅁ'
+            | 'ㄴ'
+            | 'ㅇ'
+            | 'ㄹ'
+            | 'ㅎ'
+            | 'ㅗ'
+            | 'ㅓ'
+            | 'ㅏ'
+            | 'ㅣ'
+            | 'ㅋ'
+            | 'ㅌ'
+            | 'ㅊ'
+            | 'ㅍ'
+            | 'ㅠ'
+            | 'ㅜ'
+            | 'ㅡ'
+            | 'ㅘ'
+            | 'ㅙ'
+            | 'ㅚ'
+            | 'ㅝ'
+            | 'ㅞ'
+            | 'ㅟ'
+            | 'ㅢ'
+    )
+}
+
+fn english_variants_for_jamo(jamo: char, map: &HashMap<char, &'static str>) -> Vec<String> {
+    let Some(out) = map.get(&jamo) else {
+        return vec![jamo.to_string()];
+    };
+
+    if !is_shift_ambiguous_jamo(jamo) {
+        return vec![(*out).to_string()];
+    }
+
+    out.chars().fold(vec![String::new()], |variants, ch| {
+        variants
+            .into_iter()
+            .flat_map(|prefix| {
+                let mut next = Vec::with_capacity(2);
+                next.push(format!("{prefix}{ch}"));
+                if ch.is_ascii_lowercase() {
+                    next.push(format!("{prefix}{}", ch.to_ascii_uppercase()));
+                }
+                next
+            })
+            .collect()
+    })
+}
+
+/// 한국어로 입력된 문자열을 영어 후보들로 변환
+/// - Shift 여부를 알 수 없는 음소에 대해서는 대소문자 후보를 모두 생성
+pub fn convert_korean_to_english_candidates(korean_input: &str) -> Vec<String> {
     let map = get_korean_to_english_map();
 
-    // NFC 정규화로 NFD 입력을 최대한 완성형으로 결합
     let normalized: String = korean_input.nfc().collect();
 
     normalized
         .chars()
         .flat_map(decompose_hangul)
-        .flat_map(|jamo| {
-            // 매핑이 있으면 그 문자열을, 없으면 원문 글자를 사용
-            if let Some(out) = map.get(&jamo) {
-                out.chars().collect::<Vec<char>>()
-            } else {
-                vec![jamo]
-            }
+        .fold(vec![String::new()], |candidates, jamo| {
+            let variants = english_variants_for_jamo(jamo, &map);
+            candidates
+                .into_iter()
+                .flat_map(|prefix| {
+                    variants
+                        .iter()
+                        .map(move |variant| format!("{prefix}{variant}"))
+                })
+                .collect()
         })
-        .collect()
+}
+
+/// 한국어로 입력된 문자열을 영어로 변환
+/// - 먼저 NFC 정규화를 수행하여 가능한 경우 완성형으로 결합
+/// - 이후 음절은 자모로 분해, 단일 자모는 그대로 두고 매핑으로 변환
+pub fn convert_korean_to_english(korean_input: &str) -> String {
+    convert_korean_to_english_candidates(korean_input)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -180,25 +245,44 @@ mod tests {
         assert!(contains_korean("며"));
         assert!(contains_korean("내"));
         assert!(contains_korean("안녕하세요"));
-        
+
         // 한글 자모
         assert!(contains_korean("ㅍㅣ"));
         assert!(contains_korean("ㅔㅞㅡ"));
         assert!(contains_korean("ㅛㅁ구"));
-        
+
         // 영문
         assert!(!contains_korean("ls"));
         assert!(!contains_korean("npm"));
         assert!(!contains_korean("hello"));
         assert!(!contains_korean("nonexistent"));
-        
+
         // 혼합
         assert!(contains_korean("ls안녕"));
         assert!(contains_korean("helloㅎㅎ"));
-        
+
         // 기타
         assert!(!contains_korean(""));
         assert!(!contains_korean("123"));
         assert!(!contains_korean("!@#$"));
+    }
+
+    #[test]
+    fn test_shift_ambiguous_candidates() {
+        assert_eq!(convert_korean_to_english_candidates("ㅣ"), vec!["l", "L"]);
+        assert_eq!(
+            convert_korean_to_english_candidates("ㅢ"),
+            vec!["ml", "mL", "Ml", "ML"]
+        );
+        assert_eq!(
+            convert_korean_to_english_candidates("햣"),
+            vec!["git", "gIt", "Git", "GIt"]
+        );
+    }
+
+    #[test]
+    fn test_fixed_shift_candidates() {
+        assert_eq!(convert_korean_to_english_candidates("ㄸ"), vec!["E"]);
+        assert_eq!(convert_korean_to_english_candidates("ㅖ"), vec!["P"]);
     }
 }
