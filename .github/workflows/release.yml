@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Bump version
+        id: new
+        run: node .github/scripts/bump-version.mjs "${{ inputs.bump }}"
+
+      - name: Update Cargo.lock
+        run: cargo generate-lockfile
+
+      - name: Commit version bump
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore: bump version to v${{ steps.new.outputs.version }}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git push
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "v${{ steps.new.outputs.version }}" --target "${{ steps.commit.outputs.sha }}" --generate-notes
+
+      - name: Generate updated Homebrew formula
+        run: node .github/scripts/update-homebrew.mjs "${{ steps.new.outputs.version }}"
+
+      - name: Create Homebrew PR
+        id: homebrew_pr
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.new.outputs.version }}"
+          BRANCH="vltl_${VERSION}"
+          REPO="SeokminHong/homebrew-brew"
+
+          MAIN_SHA=$(gh api "repos/${REPO}/git/ref/heads/main" -q '.object.sha')
+
+          gh api "repos/${REPO}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" \
+            -f sha="${MAIN_SHA}"
+
+          FILE_SHA=$(gh api "repos/${REPO}/contents/Formula/vltl.rb" -q '.sha')
+
+          CONTENT=$(base64 -w 0 /tmp/vltl.rb)
+          gh api "repos/${REPO}/contents/Formula/vltl.rb" \
+            -X PUT \
+            -f message="Update vltl to ${VERSION}" \
+            -f content="${CONTENT}" \
+            -f sha="${FILE_SHA}" \
+            -f branch="${BRANCH}"
+
+          PR_URL=$(gh api "repos/${REPO}/pulls" \
+            -f title="Update vltl to ${VERSION}" \
+            -f head="${BRANCH}" \
+            -f base="main" \
+            -f body="Update vltl formula to version ${VERSION}" \
+            -q '.html_url')
+
+          echo "pr_url=${PR_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Release Notes with Homebrew PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.new.outputs.version }}"
+          PR_URL="${{ steps.homebrew_pr.outputs.pr_url }}"
+          CURRENT_NOTES=$(gh release view "v${VERSION}" --json body -q '.body')
+          UPDATED_NOTES=$(printf '%s\n\n## Homebrew\n\n- %s' "$CURRENT_NOTES" "$PR_URL")
+          gh release edit "v${VERSION}" --notes "$UPDATED_NOTES"
