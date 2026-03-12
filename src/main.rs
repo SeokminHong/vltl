@@ -29,6 +29,11 @@ enum Commands {
     ExtractPrograms {
         command_line: String,
     },
+    /// 커서 위치가 명령어 이름 위치인지 확인 (exit code 0: 명령어 위치, 1: 아님)
+    IsCommandPosition {
+        command_line: String,
+        cursor: usize,
+    },
     #[cfg(target_os = "macos")]
     /// IME를 영어로 전환
     SwitchToEnglish,
@@ -60,6 +65,16 @@ fn main() {
             let names = fish_parser::extract_program_names(&command_line);
             for name in names {
                 println!("{}", name);
+            }
+        }
+        Commands::IsCommandPosition {
+            command_line,
+            cursor,
+        } => {
+            if fish_parser::is_command_position(&command_line, cursor) {
+                process::exit(0);
+            } else {
+                process::exit(1);
             }
         }
         #[cfg(target_os = "macos")]

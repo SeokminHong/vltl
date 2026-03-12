@@ -352,6 +352,53 @@ function test_extract_programs_command
     end
 end
 
+function test_is_command_position
+    echo ""
+    echo "Testing vltl is-command-position command..."
+
+    # Test: single Korean token at command position
+    if vltl is-command-position "ㅎ" 1
+        print_test_result "is-command-position: single Korean token is command" 0
+    else
+        print_test_result "is-command-position: single Korean token is command" 1
+    end
+
+    # Test: Korean token as argument (not command position)
+    if not vltl is-command-position "echo ㅎ" 6
+        print_test_result "is-command-position: argument is not command" 0
+    else
+        print_test_result "is-command-position: argument is not command" 1
+    end
+
+    # Test: Korean token after semicolon (command position)
+    if vltl is-command-position "echo; ㅎ" 7
+        print_test_result "is-command-position: after semicolon is command" 0
+    else
+        print_test_result "is-command-position: after semicolon is command" 1
+    end
+
+    # Test: Korean token after pipe (command position)
+    if vltl is-command-position "echo | ㅎ" 8
+        print_test_result "is-command-position: after pipe is command" 0
+    else
+        print_test_result "is-command-position: after pipe is command" 1
+    end
+
+    # Test: Korean token after && (command position)
+    if vltl is-command-position "echo && ㅎ" 9
+        print_test_result "is-command-position: after && is command" 0
+    else
+        print_test_result "is-command-position: after && is command" 1
+    end
+
+    # Test: env var prefix, Korean token is the program name
+    if vltl is-command-position "VAR=x ㅎ" 7
+        print_test_result "is-command-position: after env var assignment is command" 0
+    else
+        print_test_result "is-command-position: after env var assignment is command" 1
+    end
+end
+
 function test_integration_convert_flow
     echo ""
     echo "Testing integration conversion flow..."
@@ -408,6 +455,7 @@ test_auto_register_with_set_cursor
 test_vltl_path_env_var
 test_switch_to_english_command
 test_extract_programs_command
+test_is_command_position
 test_integration_convert_flow
 
 # Print summary
