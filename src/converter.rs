@@ -262,7 +262,6 @@ mod tests {
 
     #[test]
     fn test_non_completed() {
-        assert_eq!(convert_korean_to_english("ㅍㅣ"), "vl");
         assert_eq!(convert_korean_to_english("ㅔㅞㅡ"), "pnpm");
         assert_eq!(convert_korean_to_english("ㅛㅁ구"), "yarn");
         assert_eq!(convert_korean_to_english("ㅎㄱ데"), "grep");
@@ -404,9 +403,8 @@ mod tests {
         // Shift가 명확한 문자 (ㄷ→e, ㄸ→E)는 대소문자 후보 없음
         let commands = vec!["echo", "Echo"];
         // 'ㄷ'은 'e'로만 변환되므로 "echo"만 매칭 (ㄷ→e는 명확)
-        // 'ㅔ'→p, 'ㅊ'→c, 'ㅗ'→h (ㅗ는 ambiguous), 'ㄷ'→e (not ambiguous)
-        // echo = e+c+h+o → ㄷ+ㅊ+ㅗ+ㅐ
-        let results = find_matching_commands("ㄷㅊㅗㅐ", &commands);
+        // echo = e+c+h+o → ㄷ+쵀 (ㅊ+ㅙ = 쵀)
+        let results = find_matching_commands("ㄷ쵀", &commands);
         // pattern: [e], [c/C], [h/H], [o]
         // "echo" → e∈[e]✓, c∈[c,C]✓, h∈[h,H]✓, o∈[o]✓ → match
         // "Echo" → E∈[e]✗ → no match

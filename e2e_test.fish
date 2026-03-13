@@ -545,6 +545,9 @@ function test_cache_functions
     echo ""
     echo "Testing cache functions..."
 
+    # Clean up any existing cache before testing
+    command rm -f ~/.cache/vltl/commands
+
     # Source init
     vltl init | source
 
@@ -569,11 +572,21 @@ function test_cache_functions
         print_test_result "variable __vltl_cache_file is set" 1
     end
 
-    # Test: Cache file exists after init (refresh_cache_if_stale runs at init)
-    if test -f $__vltl_cache_file
-        print_test_result "cache file exists after init" 0
+    # Test: Cache file is not created at init (deferred to conversion time)
+    if not test -f $__vltl_cache_file
+        print_test_result "cache file is not created at init (deferred)" 0
     else
-        print_test_result "cache file exists after init" 1
+        print_test_result "cache file is not created at init (deferred)" 1
+    end
+
+    # Test: Manual cache refresh works
+    __vltl_refresh_cache
+
+    # Test: Cache file exists after manual refresh
+    if test -f $__vltl_cache_file
+        print_test_result "cache file exists after manual refresh" 0
+    else
+        print_test_result "cache file exists after manual refresh" 1
     end
 
     # Test: Cache file contains commands
@@ -581,14 +594,6 @@ function test_cache_functions
         print_test_result "cache file is non-empty" 0
     else
         print_test_result "cache file is non-empty" 1
-    end
-
-    # Test: Manual cache refresh works
-    __vltl_refresh_cache
-    if test -f $__vltl_cache_file; and test -s $__vltl_cache_file
-        print_test_result "manual cache refresh produces non-empty file" 0
-    else
-        print_test_result "manual cache refresh produces non-empty file" 1
     end
 
     # Test: VLTL_CACHE_TTL is respected (set TTL=0 to force refresh)

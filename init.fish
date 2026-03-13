@@ -75,9 +75,10 @@ function __vltl_convert_and_expand
             end
 
             # 대소문자 후보를 고려하여 캐시된 명령어에서 매칭 검색
+            __vltl_refresh_cache_if_stale
             if test -f $__vltl_cache_file
                 set -l match ($__vltl_bin find-command --first -- "$token" < $__vltl_cache_file)
-                if test -n "$match"
+                if test -n "$match"; and begin; type -q "$match"; or abbr -q -- "$match"; end
                     commandline --current-token --replace -- "$match"
 
                     if abbr -q -- "$match"
@@ -141,6 +142,3 @@ end
 bind ' ' __vltl_abbr_space
 bind \r __vltl_abbr_enter
 bind \; __vltl_abbr_semicolon
-
-# init 시점에 캐시가 stale하면 갱신
-__vltl_refresh_cache_if_stale
