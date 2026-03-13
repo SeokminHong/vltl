@@ -3,7 +3,7 @@ set -g __vltl_cache_file ~/.cache/vltl/commands
 
 # 캐시 갱신: 사용 가능한 명령어와 abbreviation 목록을 파일에 저장
 function __vltl_refresh_cache
-    set -l cache_dir (string replace -r '/[^/]*$' '' $__vltl_cache_file)
+    set -l cache_dir (command dirname $__vltl_cache_file)
     command mkdir -p $cache_dir
     begin
         builtin --names
@@ -76,7 +76,7 @@ function __vltl_convert_and_expand
 
             # 대소문자 후보를 고려하여 캐시된 명령어에서 매칭 검색
             if test -f $__vltl_cache_file
-                set -l match ($__vltl_bin find-command -- "$token" < $__vltl_cache_file | head -1)
+                set -l match ($__vltl_bin find-command --first -- "$token" < $__vltl_cache_file)
                 if test -n "$match"
                     commandline --current-token --replace -- "$match"
 
