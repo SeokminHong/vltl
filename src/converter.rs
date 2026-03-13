@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
@@ -159,6 +159,87 @@ pub fn convert_korean_to_english(korean_input: &str) -> String {
         .collect()
 }
 
+/// 두벌식 자판에서 Shift 여부를 알 수 없는 영문자 집합
+/// Shift를 눌러도 같은 한글 자모가 입력되는 키들 (쌍자음/복합모음이 없는 키)
+static AMBIGUOUS_ENGLISH_CHARS: LazyLock<HashSet<char>> = LazyLock::new(|| {
+    [
+        'y', 'u', 'i', // ㅛ, ㅕ, ㅑ
+        'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', // ㅁ, ㄴ, ㅇ, ㄹ, ㅎ, ㅗ, ㅓ, ㅏ, ㅣ
+        'z', 'x', 'c', 'v', 'b', 'n', 'm', // ㅋ, ㅌ, ㅊ, ㅍ, ㅠ, ㅜ, ㅡ
+    ]
+    .into_iter()
+    .collect()
+});
+
+/// 영문자 하나에 대해 가능한 대소문자 후보를 반환
+/// Shift 여부가 모호한 문자는 소문자와 대문자 모두 후보로 반환
+fn char_variants(ch: char) -> Vec<char> {
+    let ambiguous = &*AMBIGUOUS_ENGLISH_CHARS;
+    if ambiguous.contains(&ch) {
+        vec![ch, ch.to_ascii_uppercase()]
+    } else {
+        vec![ch]
+    }
+}
+
+/// 한국어 문자열을 대소문자 후보를 포함한 패턴으로 변환
+/// 각 위치는 가능한 문자들의 집합 (Vec<char>)
+pub fn korean_to_pattern(korean_input: &str) -> Vec<Vec<char>> {
+    let map = &*KOREAN_TO_ENGLISH_MAP;
+    let normalized: String = korean_input.nfc().collect();
+
+    normalized
+        .chars()
+        .flat_map(decompose_hangul)
+        .flat_map(|jamo| {
+            if let Some(out) = map.get(&jamo) {
+                out.chars().map(char_variants).collect::<Vec<_>>()
+            } else {
+                vec![vec![jamo]]
+            }
+        })
+        .collect()
+}
+
+/// 명령어가 한국어 패턴에 매칭되는지 확인
+fn matches_korean_pattern(command: &str, pattern: &[Vec<char>]) -> bool {
+    let chars: Vec<char> = command.chars().collect();
+    if chars.len() != pattern.len() {
+        return false;
+    }
+    chars
+        .iter()
+        .zip(pattern.iter())
+        .all(|(ch, variants)| variants.contains(ch))
+}
+
+/// 한국어 입력에 대해 대소문자 후보를 고려하여 일치하는 명령어를 찾음
+/// 기본 변환(소문자)이 있으면 우선 반환하고, 나머지 후보를 뒤에 추가
+pub fn find_matching_commands(korean_input: &str, commands: &[&str]) -> Vec<String> {
+    let pattern = korean_to_pattern(korean_input);
+    let default_conversion = convert_korean_to_english(korean_input);
+
+    let mut results = Vec::new();
+    let mut has_default = false;
+
+    for &cmd in commands {
+        if matches_korean_pattern(cmd, &pattern) {
+            if cmd == default_conversion {
+                has_default = true;
+            } else {
+                results.push(cmd.to_string());
+            }
+        }
+    }
+
+    // 기본 변환(소문자)을 최우선으로 배치
+    if has_default {
+        results.insert(0, default_conversion);
+    }
+
+    results
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,5 +311,119 @@ mod tests {
         assert_eq!(convert_korean_to_english("잃"), "dlfg"); // ㅇ+ㅣ+ㄹㅎ
         assert_eq!(convert_korean_to_english("핥"), "gkfx"); // ㅎ+ㅏ+ㄹㅌ
         assert_eq!(convert_korean_to_english("읊"), "dmfv"); // ㅇ+ㅡ+ㄹㅍ
+    }
+
+    #[test]
+    fn test_char_variants_ambiguous() {
+        // Shift 여부가 모호한 문자: 소문자와 대문자 모두 반환
+        assert_eq!(char_variants('l'), vec!['l', 'L']);
+        assert_eq!(char_variants('a'), vec!['a', 'A']);
+        assert_eq!(char_variants('m'), vec!['m', 'M']);
+    }
+
+    #[test]
+    fn test_char_variants_unambiguous() {
+        // Shift 여부가 명확한 문자: 해당 케이스만 반환
+        assert_eq!(char_variants('q'), vec!['q']); // ㅂ→q, ㅃ→Q
+        assert_eq!(char_variants('e'), vec!['e']); // ㄷ→e, ㄸ→E
+        assert_eq!(char_variants('Q'), vec!['Q']); // ㅃ→Q
+        assert_eq!(char_variants('E'), vec!['E']); // ㄸ→E
+    }
+
+    #[test]
+    fn test_korean_to_pattern() {
+        // ㅣ는 l/L 모두 가능
+        let pattern = korean_to_pattern("ㅣ");
+        assert_eq!(pattern, vec![vec!['l', 'L']]);
+
+        // ㄷ은 e만 가능 (ㄸ→E이므로 명확)
+        let pattern = korean_to_pattern("ㄷ");
+        assert_eq!(pattern, vec![vec!['e']]);
+
+        // ㄸ은 E만 가능 (명확한 대문자)
+        let pattern = korean_to_pattern("ㄸ");
+        assert_eq!(pattern, vec![vec!['E']]);
+
+        // ㅣㅅ → l/L, t만 가능
+        let pattern = korean_to_pattern("ㅣㅅ");
+        assert_eq!(pattern, vec![vec!['l', 'L'], vec!['t']]);
+    }
+
+    #[test]
+    fn test_matches_korean_pattern() {
+        // ㅣ → l/L 패턴
+        let pattern = korean_to_pattern("ㅣ");
+        assert!(matches_korean_pattern("l", &pattern));
+        assert!(matches_korean_pattern("L", &pattern));
+        assert!(!matches_korean_pattern("k", &pattern));
+
+        // ㅣㅅ → [l/L][t] 패턴
+        let pattern = korean_to_pattern("ㅣㅅ");
+        assert!(matches_korean_pattern("lt", &pattern));
+        assert!(matches_korean_pattern("Lt", &pattern));
+        assert!(!matches_korean_pattern("lT", &pattern)); // ㅅ→t는 명확 (ㅆ→T)
+        assert!(!matches_korean_pattern("ls", &pattern));
+    }
+
+    #[test]
+    fn test_find_matching_commands_exact() {
+        // 기본 변환(소문자)이 명령어 목록에 있는 경우
+        // ㅣ→l, ㅅ→t이므로 기본 변환은 "lt"
+        let commands = vec!["ls", "lt", "git", "npm"];
+        let results = find_matching_commands("ㅣㅅ", &commands);
+        assert_eq!(results, vec!["lt"]); // "lt"가 기본 변환이므로 우선 반환
+    }
+
+    #[test]
+    fn test_find_matching_commands_case_variant() {
+        // ㅣ의 대문자 후보 (L)를 이용하여 매칭
+        let commands = vec!["ls", "Lt", "git", "npm"];
+        let results = find_matching_commands("ㅣㅅ", &commands);
+        assert_eq!(results, vec!["Lt"]);
+    }
+
+    #[test]
+    fn test_find_matching_commands_default_priority() {
+        // 기본 변환과 대문자 후보가 모두 있는 경우, 기본 변환이 우선
+        let commands = vec!["Lt", "lt", "git"];
+        let results = find_matching_commands("ㅣㅅ", &commands);
+        assert_eq!(results[0], "lt"); // 기본 변환이 첫 번째
+        assert!(results.contains(&"Lt".to_string())); // 대문자 후보도 포함
+    }
+
+    #[test]
+    fn test_find_matching_commands_no_match() {
+        // 매칭되는 명령어가 없는 경우
+        let commands = vec!["ls", "git", "npm"];
+        let results = find_matching_commands("ㅣㅅ", &commands);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_find_matching_commands_unambiguous() {
+        // Shift가 명확한 문자 (ㄷ→e, ㄸ→E)는 대소문자 후보 없음
+        let commands = vec!["echo", "Echo"];
+        // 'ㄷ'은 'e'로만 변환되므로 "echo"만 매칭 (ㄷ→e는 명확)
+        // 'ㅔ'→p, 'ㅊ'→c, 'ㅗ'→h (ㅗ는 ambiguous), 'ㄷ'→e (not ambiguous)
+        // echo = e+c+h+o → ㄷ+ㅊ+ㅗ+ㅐ
+        let results = find_matching_commands("ㄷㅊㅗㅐ", &commands);
+        // pattern: [e], [c/C], [h/H], [o]
+        // "echo" → e∈[e]✓, c∈[c,C]✓, h∈[h,H]✓, o∈[o]✓ → match
+        // "Echo" → E∈[e]✗ → no match
+        assert_eq!(results, vec!["echo"]);
+    }
+
+    #[test]
+    fn test_find_matching_commands_compound_vowel() {
+        // 복합모음이 포함된 경우 (ㅘ→hk, 둘 다 ambiguous)
+        let pattern = korean_to_pattern("ㅘ");
+        assert_eq!(
+            pattern,
+            vec![vec!['h', 'H'], vec!['k', 'K']]
+        );
+        assert!(matches_korean_pattern("hk", &pattern));
+        assert!(matches_korean_pattern("HK", &pattern));
+        assert!(matches_korean_pattern("Hk", &pattern));
+        assert!(matches_korean_pattern("hK", &pattern));
     }
 }
