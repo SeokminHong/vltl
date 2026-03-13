@@ -34,6 +34,13 @@ enum Commands {
         command_line: String,
         cursor: usize,
     },
+    /// 대소문자 후보를 고려하여 한국어 입력에 매칭되는 명령어를 찾음 (stdin에서 명령어 목록 읽기)
+    FindCommand {
+        word: String,
+        /// 첫 번째 매칭 결과만 반환
+        #[arg(long)]
+        first: bool,
+    },
     #[cfg(target_os = "macos")]
     /// IME를 영어로 전환
     SwitchToEnglish,
@@ -75,6 +82,27 @@ fn main() {
                 process::exit(0);
             } else {
                 process::exit(1);
+            }
+        }
+        Commands::FindCommand { word, first } => {
+            use std::io::{self, BufRead};
+            let stdin = io::stdin();
+            let commands: Vec<String> = stdin
+                .lock()
+                .lines()
+                .filter_map(|line| line.ok())
+                .filter(|line| !line.is_empty())
+                .collect();
+            let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
+            let matches = converter::find_matching_commands(&word, &cmd_refs);
+            if first {
+                if let Some(m) = matches.first() {
+                    println!("{}", m);
+                }
+            } else {
+                for m in matches {
+                    println!("{}", m);
+                }
             }
         }
         #[cfg(target_os = "macos")]
