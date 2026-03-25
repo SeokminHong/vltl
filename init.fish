@@ -66,7 +66,14 @@ end
 
 function __vltl_abbr_space
     __vltl_convert_and_expand
+    set -l before (commandline)
     commandline -f expand-abbr
+    set -l after (commandline)
+    set -l cursor (commandline --cursor)
+    # --set-cursor가 사용된 경우, 커서가 끝이 아닌 위치로 이동하므로 공백을 삽입하지 않음
+    if test "$before" != "$after"; and test "$cursor" -lt (string length -- "$after")
+        return
+    end
     commandline -i ' '
 end
 
@@ -78,7 +85,14 @@ end
 
 function __vltl_abbr_semicolon
     __vltl_convert_and_expand
+    set -l before (commandline)
     commandline -f expand-abbr
+    set -l after (commandline)
+    set -l cursor (commandline --cursor)
+    # --set-cursor가 사용된 경우, 커서가 끝이 아닌 위치로 이동하므로 세미콜론을 삽입하지 않음
+    if test "$before" != "$after"; and test "$cursor" -lt (string length -- "$after")
+        return
+    end
     commandline -i ';'
 end
 
