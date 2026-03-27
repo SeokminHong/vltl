@@ -496,6 +496,123 @@ function test_integration_convert_flow
     abbr -e -- "$korean_input"
 end
 
+function test_find_command
+    echo ""
+    echo "Testing find-command subcommand (case variant matching)..."
+
+    # Test: Default conversion is found
+    set -l result (printf "ls\nlt\ngit\n" | vltl find-command -- "ㅣㅅ")
+    if test (count $result) -ge 1; and test "$result[1]" = lt
+        print_test_result "find-command: default conversion 'lt' found first" 0
+    else
+        print_test_result "find-command: default conversion 'lt' found first (got: $result)" 1
+    end
+
+    # Test: Case variant is found when default is not available
+    set -l result (printf "ls\nLt\ngit\n" | vltl find-command -- "ㅣㅅ")
+    if test (count $result) -ge 1; and test "$result[1]" = Lt
+        print_test_result "find-command: case variant 'Lt' found" 0
+    else
+        print_test_result "find-command: case variant 'Lt' found (got: $result)" 1
+    end
+
+    # Test: No match returns empty
+    set -l result (printf "ls\ngit\nnpm\n" | vltl find-command -- "ㅣㅅ")
+    if test (count $result) -eq 0
+        print_test_result "find-command: no match returns empty" 0
+    else
+        print_test_result "find-command: no match returns empty (got: $result)" 1
+    end
+
+    # Test: Unambiguous character (ㄸ→E only)
+    set -l result (printf "e\nE\n" | vltl find-command -- "ㄸ")
+    if test (count $result) -eq 1; and test "$result[1]" = E
+        print_test_result "find-command: unambiguous ㄸ matches only 'E'" 0
+    else
+        print_test_result "find-command: unambiguous ㄸ matches only 'E' (got: $result)" 1
+    end
+
+    # Test: Ambiguous ㅣ matches both l and L
+    set -l result (printf "l\nL\n" | vltl find-command -- "ㅣ")
+    if test (count $result) -eq 2
+        print_test_result "find-command: ambiguous ㅣ matches both l and L" 0
+    else
+        print_test_result "find-command: ambiguous ㅣ matches both l and L (got: $result)" 1
+    end
+end
+
+function test_cache_functions
+    echo ""
+    echo "Testing cache functions..."
+
+    # Clean up any existing cache before testing
+    command rm -f ~/.cache/vltl/commands
+
+    # Source init
+    vltl init | source
+
+    # Test: __vltl_refresh_cache is defined
+    if type -q __vltl_refresh_cache
+        print_test_result "function __vltl_refresh_cache is defined" 0
+    else
+        print_test_result "function __vltl_refresh_cache is defined" 1
+    end
+
+    # Test: __vltl_refresh_cache_if_stale is defined
+    if type -q __vltl_refresh_cache_if_stale
+        print_test_result "function __vltl_refresh_cache_if_stale is defined" 0
+    else
+        print_test_result "function __vltl_refresh_cache_if_stale is defined" 1
+    end
+
+    # Test: __vltl_cache_file is set
+    if set -q __vltl_cache_file
+        print_test_result "variable __vltl_cache_file is set" 0
+    else
+        print_test_result "variable __vltl_cache_file is set" 1
+    end
+
+    # Test: Cache file is not created at init (deferred to conversion time)
+    if not test -f $__vltl_cache_file
+        print_test_result "cache file is not created at init (deferred)" 0
+    else
+        print_test_result "cache file is not created at init (deferred)" 1
+    end
+
+    # Test: Manual cache refresh works
+    __vltl_refresh_cache
+
+    # Test: Cache file exists after manual refresh
+    if test -f $__vltl_cache_file
+        print_test_result "cache file exists after manual refresh" 0
+    else
+        print_test_result "cache file exists after manual refresh" 1
+    end
+
+    # Test: Cache file contains commands
+    if test -s $__vltl_cache_file
+        print_test_result "cache file is non-empty" 0
+    else
+        print_test_result "cache file is non-empty" 1
+    end
+
+    # Test: VLTL_CACHE_TTL is respected (set TTL=0 to force refresh)
+    set -l old_mtime (command stat -c %Y $__vltl_cache_file 2>/dev/null; or command stat -f %m $__vltl_cache_file 2>/dev/null)
+    sleep 1
+    set VLTL_CACHE_TTL 0
+    __vltl_refresh_cache_if_stale
+    set -l new_mtime (command stat -c %Y $__vltl_cache_file 2>/dev/null; or command stat -f %m $__vltl_cache_file 2>/dev/null)
+    set -e VLTL_CACHE_TTL
+    if test "$old_mtime" != "$new_mtime"
+        print_test_result "VLTL_CACHE_TTL=0 forces cache refresh" 0
+    else
+        print_test_result "VLTL_CACHE_TTL=0 forces cache refresh" 1
+    end
+
+    # Clean up test cache
+    command rm -f $__vltl_cache_file
+end
+
 # Run all tests
 echo "========================================"
 echo "Running vltl E2E Tests"
@@ -515,6 +632,8 @@ test_extract_programs_command
 test_is_command_position
 test_no_abbr_for_nonexistent_command
 test_integration_convert_flow
+test_find_command
+test_cache_functions
 
 # Print summary
 echo ""
