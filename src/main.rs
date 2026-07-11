@@ -25,6 +25,12 @@ enum Commands {
     HasKorean {
         word: String,
     },
+    /// 한 번의 호출로 한글 감지, 명령어 위치 판별, 두벌식 변환 수행
+    Resolve {
+        token: String,
+        command_line: String,
+        cursor: usize,
+    },
     /// Fish 명령어 줄에서 프로그램 이름을 추출
     ExtractPrograms {
         command_line: String,
@@ -61,6 +67,17 @@ fn main() {
                 process::exit(1);
             }
         }
+        Commands::Resolve {
+            token,
+            command_line,
+            cursor,
+        } => {
+            if let Some(converted) = resolve_token(&token, &command_line, cursor) {
+                println!("{converted}");
+            } else {
+                process::exit(1);
+            }
+        }
         Commands::ExtractPrograms { command_line } => {
             let names = fish_parser::extract_program_names(&command_line);
             for name in names {
@@ -89,5 +106,31 @@ fn main() {
                 }
             }
         }
+    }
+}
+
+fn resolve_token(token: &str, command_line: &str, cursor: usize) -> Option<String> {
+    if !converter::contains_korean(token) || !fish_parser::is_command_position(command_line, cursor)
+    {
+        return None;
+    }
+
+    let converted = converter::convert_korean_to_english(token);
+    (converted != token).then_some(converted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_token;
+
+    #[test]
+    fn resolves_korean_command_in_one_step() {
+        assert_eq!(resolve_token("햣", "햣 status", 1).as_deref(), Some("git"));
+    }
+
+    #[test]
+    fn ignores_arguments_and_ascii_tokens() {
+        assert_eq!(resolve_token("ㅎ", "echo ㅎ", 6), None);
+        assert_eq!(resolve_token("git", "git status", 3), None);
     }
 }

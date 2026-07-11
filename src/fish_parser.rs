@@ -1,8 +1,7 @@
-/// Fish shell command line parser for extracting program names.
-///
-/// Uses [tree-sitter-fish](https://github.com/ram02z/tree-sitter-fish) to parse
-/// Fish command lines and extract the program name from each command.
-
+//! Fish shell command line parser for extracting program names.
+//!
+//! Uses [tree-sitter-fish](https://github.com/ram02z/tree-sitter-fish) to parse
+//! Fish command lines and extract the program name from each command.
 use tree_sitter::{Node, Parser};
 
 /// Extract program names from a Fish shell command line.
@@ -119,10 +118,10 @@ fn node_text_unquoted(node: &Node, source: &[u8]) -> String {
 /// Get the program name from a `command` node, skipping any leading variable assignments.
 fn get_program_name(command_node: &Node, source: &[u8]) -> Option<String> {
     // Check the `name` field (first token of the command)
-    if let Some(name_node) = command_node.child_by_field_name("name") {
-        if !is_assignment_word(&name_node, source) {
-            return Some(node_text_unquoted(&name_node, source));
-        }
+    if let Some(name_node) = command_node.child_by_field_name("name")
+        && !is_assignment_word(&name_node, source)
+    {
+        return Some(node_text_unquoted(&name_node, source));
     }
     // The `name` field was a variable assignment — look through `argument` fields
     let mut cursor = command_node.walk();
@@ -144,10 +143,10 @@ fn get_program_name(command_node: &Node, source: &[u8]) -> Option<String> {
 
 /// Get the byte range `(start, end)` of the program name from a `command` node.
 fn get_program_name_range(command_node: &Node, source: &[u8]) -> Option<(usize, usize)> {
-    if let Some(name_node) = command_node.child_by_field_name("name") {
-        if !is_assignment_word(&name_node, source) {
-            return Some((name_node.start_byte(), name_node.end_byte()));
-        }
+    if let Some(name_node) = command_node.child_by_field_name("name")
+        && !is_assignment_word(&name_node, source)
+    {
+        return Some((name_node.start_byte(), name_node.end_byte()));
     }
     let mut cursor = command_node.walk();
     if cursor.goto_first_child() {
@@ -254,7 +253,10 @@ mod tests {
 
     #[test]
     fn test_pipe() {
-        assert_eq!(extract_program_names("echo hello | cat"), vec!["echo", "cat"]);
+        assert_eq!(
+            extract_program_names("echo hello | cat"),
+            vec!["echo", "cat"]
+        );
     }
 
     #[test]
@@ -275,10 +277,7 @@ mod tests {
 
     #[test]
     fn test_semicolon() {
-        assert_eq!(
-            extract_program_names("echo hello; ls"),
-            vec!["echo", "ls"]
-        );
+        assert_eq!(extract_program_names("echo hello; ls"), vec!["echo", "ls"]);
     }
 
     #[test]
@@ -288,10 +287,7 @@ mod tests {
 
     #[test]
     fn test_env_var_assignment() {
-        assert_eq!(
-            extract_program_names("VAR=value echo hello"),
-            vec!["echo"]
-        );
+        assert_eq!(extract_program_names("VAR=value echo hello"), vec!["echo"]);
     }
 
     #[test]
@@ -304,19 +300,13 @@ mod tests {
 
     #[test]
     fn test_korean_env_var() {
-        assert_eq!(
-            extract_program_names("변수=all yarn lint"),
-            vec!["yarn"]
-        );
+        assert_eq!(extract_program_names("변수=all yarn lint"), vec!["yarn"]);
     }
 
     #[test]
     fn test_quoted_equals_not_assignment() {
         // '=' inside quotes should NOT be treated as assignment
-        assert_eq!(
-            extract_program_names("'VAR=value' arg"),
-            vec!["VAR=value"]
-        );
+        assert_eq!(extract_program_names("'VAR=value' arg"), vec!["VAR=value"]);
     }
 
     #[test]
@@ -332,10 +322,7 @@ mod tests {
     #[test]
     fn test_escaped_quote_in_arg() {
         // echo '변수=all a\'b' — the program is "echo"
-        assert_eq!(
-            extract_program_names("echo '변수=all a\\'b'"),
-            vec!["echo"]
-        );
+        assert_eq!(extract_program_names("echo '변수=all a\\'b'"), vec!["echo"]);
     }
 
     #[test]
@@ -366,19 +353,13 @@ mod tests {
 
     #[test]
     fn test_newline_separator() {
-        assert_eq!(
-            extract_program_names("echo hello\nls"),
-            vec!["echo", "ls"]
-        );
+        assert_eq!(extract_program_names("echo hello\nls"), vec!["echo", "ls"]);
     }
 
     #[test]
     fn test_command_substitution_with_operators() {
         // Operators inside (...) should NOT split commands
-        assert_eq!(
-            extract_program_names("echo (cmd1 && cmd2)"),
-            vec!["echo"]
-        );
+        assert_eq!(extract_program_names("echo (cmd1 && cmd2)"), vec!["echo"]);
     }
 
     #[test]
@@ -437,10 +418,7 @@ mod tests {
     fn test_complex_edge_case() {
         // The motivating edge case from the issue:
         // echo '변수=all a\'b'
-        assert_eq!(
-            extract_program_names("echo '변수=all a\\'b'"),
-            vec!["echo"]
-        );
+        assert_eq!(extract_program_names("echo '변수=all a\\'b'"), vec!["echo"]);
     }
 
     #[test]

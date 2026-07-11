@@ -1,5 +1,51 @@
+set -g __vltl_platform (uname -s)
+
+function __vltl_is_macos
+    test "$__vltl_platform" = Darwin
+end
+
+function __vltl_resolve_command
+    set -l candidate $argv[1]
+
+    if abbr -q -- "$candidate"
+        printf '%s\n' "$candidate"
+        return 0
+    end
+
+    set -l candidate_type (type -t -- "$candidate" 2>/dev/null)
+    if test -n "$candidate_type"; and test "$candidate_type" != file
+        printf '%s\n' "$candidate"
+        return 0
+    end
+
+    if __vltl_is_macos
+        set -l lowercase_candidate (string lower -- "$candidate")
+        if test "$lowercase_candidate" != "$candidate"
+            if test (type -t -- "$lowercase_candidate" 2>/dev/null) = file
+                printf '%s\n' "$lowercase_candidate"
+                return 0
+            end
+        end
+    end
+
+    if test "$candidate_type" = file
+        printf '%s\n' "$candidate"
+        return 0
+    end
+
+    return 1
+end
+
 function __vltl_convert_and_expand
     set -l token (commandline --current-token)
+
+    if test -z "$token"; or not string match -qr '[^\x00-\x7F]' -- "$token"
+        return
+    end
+
+    if abbr -q -- "$token"
+        return
+    end
 
     # $VLTL_PATH가 설정되어 있으면 해당 경로의 vltl을 사용, 아니면 PATH의 vltl 사용
     set -l __vltl_bin vltl
@@ -7,31 +53,24 @@ function __vltl_convert_and_expand
         set __vltl_bin $VLTL_PATH
     end
 
-    if test -n "$token"; and $__vltl_bin has-korean -- "$token"
-        # 커서가 명령어 이름 위치에 있는지 AST로 확인
-        set -l cmdline (commandline)
-        set -l cursor_pos (commandline --cursor)
-        if not $__vltl_bin is-command-position -- "$cmdline" "$cursor_pos"
-            return
-        end
+    set -l cmdline (commandline)
+    set -l cursor_pos (commandline --cursor)
+    set -l converted ($__vltl_bin resolve -- "$token" "$cmdline" "$cursor_pos")
+    or return
 
-        set -l converted ($__vltl_bin convert -- "$token")
-        if test -n "$converted"; and test "$converted" != "$token"
-            # 존재하지 않는 명령어에 대해서는 변환하지 않음
-            if not type -q "$converted"; and not abbr -q -- "$converted"
-                return
-            end
+    set converted (__vltl_resolve_command "$converted")
+    or return
 
-            commandline --current-token --replace -- "$converted"
+    commandline --current-token --replace -- "$converted"
 
-            # 변환된 토큰에 대응하는 abbr이 있으면 한글 트리거로 자동 등록
-            if abbr -q -- "$converted"
-                __vltl_auto_register_abbr "$token" "$converted"
-            end
+    # 변환된 토큰에 대응하는 abbr이 있으면 한글 트리거로 자동 등록
+    if abbr -q -- "$converted"
+        __vltl_auto_register_abbr "$token" "$converted"
+    end
 
-            # Switch IME to English (only available on macOS)
-            $__vltl_bin switch-to-english 2>/dev/null
-        end
+    # Switch IME to English (only available on macOS)
+    if __vltl_is_macos
+        $__vltl_bin switch-to-english 2>/dev/null
     end
 end
 

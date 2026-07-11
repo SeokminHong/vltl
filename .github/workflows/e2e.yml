@@ -37,6 +37,6 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          export PATH=$PATH:$(pwd)/target/release
+          export PATH=$(pwd)/target/release:$PATH
           chmod +x e2e_test.fish
           fish e2e_test.fish

@@ -1,186 +1,149 @@
-use std::collections::HashMap;
-use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
-/// 한국어 키보드로 잘못 입력된 명령어를 영어로 변환하는 매핑
-static KOREAN_TO_ENGLISH_MAP: LazyLock<HashMap<char, &'static str>> = LazyLock::new(|| {
-    let mut map: HashMap<char, &'static str> = HashMap::new();
+const INITIAL_KEYS: [&str; 19] = [
+    "r", "R", "s", "e", "E", "f", "a", "q", "Q", "t", "T", "d", "w", "W", "c", "z", "x", "v", "g",
+];
 
-    // 자음
-    map.insert('ㅂ', "q");
-    map.insert('ㅈ', "w");
-    map.insert('ㄷ', "e");
-    map.insert('ㄱ', "r");
-    map.insert('ㅅ', "t");
-    map.insert('ㅛ', "y");
-    map.insert('ㅕ', "u");
-    map.insert('ㅑ', "i");
-    map.insert('ㅐ', "o");
-    map.insert('ㅔ', "p");
+const MEDIAL_KEYS: [&str; 21] = [
+    "k", "o", "i", "O", "j", "p", "u", "P", "h", "hk", "ho", "hl", "y", "n", "nj", "np", "nl", "b",
+    "m", "ml", "l",
+];
 
-    map.insert('ㅁ', "a");
-    map.insert('ㄴ', "s");
-    map.insert('ㅇ', "d");
-    map.insert('ㄹ', "f");
-    map.insert('ㅎ', "g");
-    map.insert('ㅗ', "h");
-    map.insert('ㅓ', "j");
-    map.insert('ㅏ', "k");
-    map.insert('ㅣ', "l");
+const FINAL_KEYS: [&str; 28] = [
+    "", "r", "R", "rt", "s", "sw", "sg", "e", "f", "fr", "fa", "fq", "ft", "fx", "fv", "fg", "a",
+    "q", "qt", "t", "T", "d", "w", "c", "z", "x", "v", "g",
+];
 
-    map.insert('ㅋ', "z");
-    map.insert('ㅌ', "x");
-    map.insert('ㅊ', "c");
-    map.insert('ㅍ', "v");
-    map.insert('ㅠ', "b");
-    map.insert('ㅜ', "n");
-    map.insert('ㅡ', "m");
-
-    // 쌍자음
-    map.insert('ㅃ', "Q");
-    map.insert('ㅉ', "W");
-    map.insert('ㄸ', "E");
-    map.insert('ㄲ', "R");
-    map.insert('ㅆ', "T");
-
-    // 복합모음: 두벌식 키 시퀀스에 맞춰 2글자 이상으로 매핑
-    map.insert('ㅒ', "O"); // ㅒ (yae) → 보통 Shift+o로 들어온 호환자모
-    map.insert('ㅖ', "P"); // ㅖ (ye)  → 보통 Shift+p
-    map.insert('ㅘ', "hk"); // ㅗ+ㅏ
-    map.insert('ㅙ', "ho"); // ㅗ+ㅐ
-    map.insert('ㅚ', "hl"); // ㅗ+ㅣ
-    map.insert('ㅝ', "nj"); // ㅜ+ㅓ
-    map.insert('ㅞ', "np"); // ㅜ+ㅔ
-    map.insert('ㅟ', "nl"); // ㅜ+ㅣ
-    map.insert('ㅢ', "ml"); // ㅡ+ㅣ
-
-    // 겹받침 (compound final consonants)
-    map.insert('ㄳ', "rt"); // ㄱ+ㅅ
-    map.insert('ㄵ', "sw"); // ㄴ+ㅈ
-    map.insert('ㄶ', "sg"); // ㄴ+ㅎ
-    map.insert('ㄺ', "fr"); // ㄹ+ㄱ
-    map.insert('ㄻ', "fa"); // ㄹ+ㅁ
-    map.insert('ㄼ', "fq"); // ㄹ+ㅂ
-    map.insert('ㄽ', "ft"); // ㄹ+ㅅ
-    map.insert('ㄾ', "fx"); // ㄹ+ㅌ
-    map.insert('ㄿ', "fv"); // ㄹ+ㅍ
-    map.insert('ㅀ', "fg"); // ㄹ+ㅎ
-    map.insert('ㅄ', "qt"); // ㅂ+ㅅ
-
-    map
-});
-
-/// 한글 완성형 문자를 자모로 분해
-fn decompose_hangul(ch: char) -> Vec<char> {
-    let code = ch as u32;
-
-    // 한글 음절 범위 (가-힣: U+AC00 - U+D7A3)
-    if (0xAC00..=0xD7A3).contains(&code) {
-        let base = code - 0xAC00;
-
-        // 초성, 중성, 종성 인덱스 계산
-        let chosung_idx = base / (21 * 28);
-        let jungsung_idx = (base % (21 * 28)) / 28;
-        let jongsung_idx = base % 28;
-
-        // 초성 테이블
-        let chosung = [
-            'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ',
-            'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
-        ];
-
-        // 중성 테이블
-        let jungsung = [
-            'ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ',
-            'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ',
-        ];
-
-        // 종성 테이블 (첫 번째는 빈 종성)
-        let jongsung = [
-            "", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "ㄻ", "ㄼ", "ㄽ", "ㄾ", "ㄿ",
-            "ㅀ", "ㅁ", "ㅂ", "ㅄ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
-        ];
-
-        let mut result = Vec::new();
-
-        if let Some(cho) = chosung.get(chosung_idx as usize) {
-            result.push(*cho);
-        }
-        if let Some(jung) = jungsung.get(jungsung_idx as usize) {
-            result.push(*jung);
-        }
-        if jongsung_idx > 0
-            && let Some(jong) = jongsung.get(jongsung_idx as usize)
-        {
-            for c in jong.chars() {
-                result.push(c);
-            }
-        }
-        result
-    } else {
-        // 완성형이 아니면 그대로 반환
-        vec![ch]
+fn compatibility_jamo_keys(character: char) -> Option<&'static str> {
+    match character {
+        'ㄱ' => Some("r"),
+        'ㄲ' => Some("R"),
+        'ㄳ' => Some("rt"),
+        'ㄴ' => Some("s"),
+        'ㄵ' => Some("sw"),
+        'ㄶ' => Some("sg"),
+        'ㄷ' => Some("e"),
+        'ㄸ' => Some("E"),
+        'ㄹ' => Some("f"),
+        'ㄺ' => Some("fr"),
+        'ㄻ' => Some("fa"),
+        'ㄼ' => Some("fq"),
+        'ㄽ' => Some("ft"),
+        'ㄾ' => Some("fx"),
+        'ㄿ' => Some("fv"),
+        'ㅀ' => Some("fg"),
+        'ㅁ' => Some("a"),
+        'ㅂ' => Some("q"),
+        'ㅃ' => Some("Q"),
+        'ㅄ' => Some("qt"),
+        'ㅅ' => Some("t"),
+        'ㅆ' => Some("T"),
+        'ㅇ' => Some("d"),
+        'ㅈ' => Some("w"),
+        'ㅉ' => Some("W"),
+        'ㅊ' => Some("c"),
+        'ㅋ' => Some("z"),
+        'ㅌ' => Some("x"),
+        'ㅍ' => Some("v"),
+        'ㅎ' => Some("g"),
+        'ㅏ' => Some("k"),
+        'ㅐ' => Some("o"),
+        'ㅑ' => Some("i"),
+        'ㅒ' => Some("O"),
+        'ㅓ' => Some("j"),
+        'ㅔ' => Some("p"),
+        'ㅕ' => Some("u"),
+        'ㅖ' => Some("P"),
+        'ㅗ' => Some("h"),
+        'ㅘ' => Some("hk"),
+        'ㅙ' => Some("ho"),
+        'ㅚ' => Some("hl"),
+        'ㅛ' => Some("y"),
+        'ㅜ' => Some("n"),
+        'ㅝ' => Some("nj"),
+        'ㅞ' => Some("np"),
+        'ㅟ' => Some("nl"),
+        'ㅠ' => Some("b"),
+        'ㅡ' => Some("m"),
+        'ㅢ' => Some("ml"),
+        'ㅣ' => Some("l"),
+        _ => None,
     }
 }
 
-/// 문자열에 한국어 문자가 포함되어 있는지 확인
-/// - 한글 완성형 음절 (가-힣: U+AC00 - U+D7A3)
-/// - 한글 자모 (ㄱ-ㅎ, ㅏ-ㅣ: U+3131 - U+318E)
+fn canonical_jamo_keys(character: char) -> Option<&'static str> {
+    let code = character as u32;
+
+    match code {
+        0x1100..=0x1112 => INITIAL_KEYS.get((code - 0x1100) as usize).copied(),
+        0x1161..=0x1175 => MEDIAL_KEYS.get((code - 0x1161) as usize).copied(),
+        0x11A8..=0x11C2 => FINAL_KEYS.get((code - 0x11A7) as usize).copied(),
+        _ => None,
+    }
+}
+
+fn append_syllable_keys(output: &mut String, character: char) -> bool {
+    let code = character as u32;
+    if !(0xAC00..=0xD7A3).contains(&code) {
+        return false;
+    }
+
+    let syllable_index = code - 0xAC00;
+    let initial_index = syllable_index / (21 * 28);
+    let medial_index = (syllable_index % (21 * 28)) / 28;
+    let final_index = syllable_index % 28;
+
+    output.push_str(INITIAL_KEYS[initial_index as usize]);
+    output.push_str(MEDIAL_KEYS[medial_index as usize]);
+    output.push_str(FINAL_KEYS[final_index as usize]);
+    true
+}
+
 pub fn contains_korean(input: &str) -> bool {
-    input.chars().any(|c| {
-        let code = c as u32;
-        // 한글 완성형 음절 (가-힣)
+    input.chars().any(|character| {
+        let code = character as u32;
         (0xAC00..=0xD7A3).contains(&code)
-            // 한글 자모 (ㄱ-ㅎ, ㅏ-ㅣ)
             || (0x3131..=0x318E).contains(&code)
+            || (0x1100..=0x11FF).contains(&code)
+            || (0xA960..=0xA97F).contains(&code)
+            || (0xD7B0..=0xD7FF).contains(&code)
     })
 }
 
-/// 한국어로 입력된 문자열을 영어로 변환
-/// - 먼저 NFC 정규화를 수행하여 가능한 경우 완성형으로 결합
-/// - 이후 음절은 자모로 분해, 단일 자모는 그대로 두고 매핑으로 변환
-pub fn convert_korean_to_english(korean_input: &str) -> String {
-    let map = &*KOREAN_TO_ENGLISH_MAP;
+/// 두벌식 한글 입력을 같은 키 위치의 영문 QWERTY 문자열로 변환합니다.
+pub fn convert_korean_to_english(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
 
-    // NFC 정규화로 NFD 입력을 최대한 완성형으로 결합
-    let normalized: String = korean_input.nfc().collect();
+    for character in input.nfc() {
+        if append_syllable_keys(&mut output, character) {
+            continue;
+        }
 
-    normalized
-        .chars()
-        .flat_map(decompose_hangul)
-        .flat_map(|jamo| {
-            // 매핑이 있으면 그 문자열을, 없으면 원문 글자를 사용
-            if let Some(out) = map.get(&jamo) {
-                out.chars().collect::<Vec<char>>()
-            } else {
-                vec![jamo]
-            }
-        })
-        .collect()
+        if let Some(keys) =
+            compatibility_jamo_keys(character).or_else(|| canonical_jamo_keys(character))
+        {
+            output.push_str(keys);
+        } else {
+            output.push(character);
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{contains_korean, convert_korean_to_english};
 
     #[test]
-    fn test_simple_conversion() {
+    fn converts_simple_syllables() {
         assert_eq!(convert_korean_to_english("피"), "vl");
         assert_eq!(convert_korean_to_english("며"), "au");
         assert_eq!(convert_korean_to_english("내"), "so");
     }
 
     #[test]
-    fn test_decompose_hangul() {
-        let result = decompose_hangul('며');
-        assert_eq!(result, vec!['ㅁ', 'ㅕ']);
-
-        let result = decompose_hangul('피');
-        assert_eq!(result, vec!['ㅍ', 'ㅣ']);
-    }
-
-    #[test]
-    fn test_non_completed() {
+    fn converts_incomplete_input() {
         assert_eq!(convert_korean_to_english("ㅍㅣ"), "vl");
         assert_eq!(convert_korean_to_english("ㅔㅞㅡ"), "pnpm");
         assert_eq!(convert_korean_to_english("ㅛㅁ구"), "yarn");
@@ -188,47 +151,37 @@ mod tests {
     }
 
     #[test]
-    fn test_contains_korean() {
-        // 한글 완성형
-        assert!(contains_korean("피"));
-        assert!(contains_korean("며"));
-        assert!(contains_korean("내"));
-        assert!(contains_korean("안녕하세요"));
-        
-        // 한글 자모
-        assert!(contains_korean("ㅍㅣ"));
-        assert!(contains_korean("ㅔㅞㅡ"));
-        assert!(contains_korean("ㅛㅁ구"));
-        
-        // 영문
-        assert!(!contains_korean("ls"));
-        assert!(!contains_korean("npm"));
-        assert!(!contains_korean("hello"));
-        assert!(!contains_korean("nonexistent"));
-        
-        // 혼합
-        assert!(contains_korean("ls안녕"));
-        assert!(contains_korean("helloㅎㅎ"));
-        
-        // 기타
-        assert!(!contains_korean(""));
-        assert!(!contains_korean("123"));
-        assert!(!contains_korean("!@#$"));
+    fn converts_compound_jamo() {
+        assert_eq!(convert_korean_to_english("까싸"), "RkTk");
+        assert_eq!(convert_korean_to_english("없"), "djqt");
+        assert_eq!(convert_korean_to_english("닭"), "ekfr");
+        assert_eq!(convert_korean_to_english("읽"), "dlfr");
+        assert_eq!(convert_korean_to_english("삶"), "tkfa");
+        assert_eq!(convert_korean_to_english("값"), "rkqt");
+        assert_eq!(convert_korean_to_english("넓"), "sjfq");
+        assert_eq!(convert_korean_to_english("앉"), "dksw");
+        assert_eq!(convert_korean_to_english("않"), "dksg");
+        assert_eq!(convert_korean_to_english("잃"), "dlfg");
+        assert_eq!(convert_korean_to_english("핥"), "gkfx");
+        assert_eq!(convert_korean_to_english("읊"), "dmfv");
+        assert_eq!(convert_korean_to_english("ㅘㄳ"), "hkrt");
     }
 
     #[test]
-    fn test_compound_jongsung() {
-        // 겹받침이 포함된 음절들의 변환 테스트
-        assert_eq!(convert_korean_to_english("없"), "djqt"); // ㅇ+ㅓ+ㅂㅅ
-        assert_eq!(convert_korean_to_english("닭"), "ekfr"); // ㄷ+ㅏ+ㄹㄱ
-        assert_eq!(convert_korean_to_english("읽"), "dlfr"); // ㅇ+ㅣ+ㄹㄱ
-        assert_eq!(convert_korean_to_english("삶"), "tkfa"); // ㅅ+ㅏ+ㄹㅁ
-        assert_eq!(convert_korean_to_english("값"), "rkqt"); // ㄱ+ㅏ+ㅂㅅ
-        assert_eq!(convert_korean_to_english("넓"), "sjfq"); // ㄴ+ㅓ+ㄹㅂ
-        assert_eq!(convert_korean_to_english("앉"), "dksw"); // ㅇ+ㅏ+ㄴㅈ
-        assert_eq!(convert_korean_to_english("않"), "dksg"); // ㅇ+ㅏ+ㄴㅎ
-        assert_eq!(convert_korean_to_english("잃"), "dlfg"); // ㅇ+ㅣ+ㄹㅎ
-        assert_eq!(convert_korean_to_english("핥"), "gkfx"); // ㅎ+ㅏ+ㄹㅌ
-        assert_eq!(convert_korean_to_english("읊"), "dmfv"); // ㅇ+ㅡ+ㄹㅍ
+    fn normalizes_canonical_jamo() {
+        assert_eq!(
+            convert_korean_to_english("\u{1100}\u{116A}\u{11AA}"),
+            "rhkrt"
+        );
+    }
+
+    #[test]
+    fn detects_korean_ranges() {
+        assert!(contains_korean("안녕하세요"));
+        assert!(contains_korean("ㅍㅣ"));
+        assert!(contains_korean("\u{1100}\u{1161}"));
+        assert!(!contains_korean("hello"));
+        assert!(!contains_korean("123!"));
+        assert!(!contains_korean(""));
     }
 }
