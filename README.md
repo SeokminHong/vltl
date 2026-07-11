@@ -50,6 +50,8 @@ cargo install vltl
 
    vltl binds `space`, `enter`, and `;` so that any Korean token is converted to its QWERTY equivalent before fish's native abbreviation expansion runs.
 
+   ASCII-only tokens are filtered by fish without starting `vltl`. For Korean input, detection, command-position parsing, and conversion run in one `vltl resolve` process. The operating system is detected once when the init script is sourced.
+
 ## Development
 
 ### Running Tests
@@ -89,6 +91,7 @@ The e2e tests verify:
 - Function definitions after sourcing init (`__vltl_convert_and_expand`, `__vltl_auto_register_abbr`, etc.)
 - Korean-to-English conversion via `vltl convert`
 - Korean detection via `vltl has-korean`
+- Combined Korean detection, command-position parsing, and conversion via `vltl resolve`
 - Automatic abbr registration for Korean triggers
 - Preservation of abbr options (`--position anywhere`, `--set-cursor`, etc.)
 - No duplicate abbr registration

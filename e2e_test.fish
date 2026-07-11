@@ -199,6 +199,45 @@ function test_has_korean_command
     end
 end
 
+function test_resolve_command
+    echo ""
+    echo "Testing combined resolve command..."
+
+    set -l result (vltl resolve -- "햣" "햣 status" 1)
+    if test $status -eq 0; and test "$result" = git
+        print_test_result "resolve: converts a Korean command" 0
+    else
+        print_test_result "resolve: converts a Korean command (got: $result)" 1
+    end
+
+    set result (vltl resolve -- "ㅎ" "echo ㅎ" 6)
+    if test $status -eq 1; and test -z "$result"
+        print_test_result "resolve: ignores a Korean argument" 0
+    else
+        print_test_result "resolve: ignores a Korean argument" 1
+    end
+
+    set result (vltl resolve -- git "git status" 3)
+    if test $status -eq 1; and test -z "$result"
+        print_test_result "resolve: ignores an ASCII command" 0
+    else
+        print_test_result "resolve: ignores an ASCII command" 1
+    end
+
+    set -l init_content (vltl init)
+    if string match -q '*$__vltl_bin resolve*' -- "$init_content"
+        print_test_result "resolve: init uses one combined vltl call" 0
+    else
+        print_test_result "resolve: init uses one combined vltl call" 1
+    end
+
+    if not string match -qr '\$__vltl_bin (has-korean|is-command-position|convert)' -- "$init_content"
+        print_test_result "resolve: init avoids legacy vltl subprocess chain" 0
+    else
+        print_test_result "resolve: init avoids legacy vltl subprocess chain" 1
+    end
+end
+
 function test_auto_register_abbr
     echo ""
     echo "Testing abbr auto-registration..."
@@ -544,6 +583,7 @@ echo "========================================"
 test_function_definitions
 test_convert_command
 test_has_korean_command
+test_resolve_command
 test_auto_register_abbr
 test_auto_register_preserves_options
 test_auto_register_no_duplicate
