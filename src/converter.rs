@@ -194,22 +194,22 @@ mod tests {
         assert!(contains_korean("며"));
         assert!(contains_korean("내"));
         assert!(contains_korean("안녕하세요"));
-        
+
         // 한글 자모
         assert!(contains_korean("ㅍㅣ"));
         assert!(contains_korean("ㅔㅞㅡ"));
         assert!(contains_korean("ㅛㅁ구"));
-        
+
         // 영문
         assert!(!contains_korean("ls"));
         assert!(!contains_korean("npm"));
         assert!(!contains_korean("hello"));
         assert!(!contains_korean("nonexistent"));
-        
+
         // 혼합
         assert!(contains_korean("ls안녕"));
         assert!(contains_korean("helloㅎㅎ"));
-        
+
         // 기타
         assert!(!contains_korean(""));
         assert!(!contains_korean("123"));
