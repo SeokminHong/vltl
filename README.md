@@ -46,6 +46,8 @@ cargo install vltl
    - The Korean trigger `ㅣ` is auto-registered as an abbr for next time
    - On macOS, the IME switches to English
 
+   Shift-derived uppercase letters are preserved by `vltl convert`. On macOS, executable command candidates are normalized to lowercase when the same lowercase file command exists, matching the default case-insensitive filesystem behavior.
+
    vltl binds `space`, `enter`, and `;` so that any Korean token is converted to its QWERTY equivalent before fish's native abbreviation expansion runs.
 
 ## Development

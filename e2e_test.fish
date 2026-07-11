@@ -33,6 +33,12 @@ function test_function_definitions
         print_test_result "function __vltl_convert_and_expand is defined" 1
     end
 
+    if type -q __vltl_resolve_command
+        print_test_result "function __vltl_resolve_command is defined" 0
+    else
+        print_test_result "function __vltl_resolve_command is defined" 1
+    end
+
     # Test: __vltl_auto_register_abbr is defined
     if type -q __vltl_auto_register_abbr
         print_test_result "function __vltl_auto_register_abbr is defined" 0
@@ -72,6 +78,39 @@ function test_function_definitions
         print_test_result "old __vltl_check helper is not defined" 0
     else
         print_test_result "old __vltl_check helper is not defined" 1
+    end
+end
+
+function test_macos_case_insensitive_command
+    echo ""
+    echo "Testing macOS case-insensitive executable resolution..."
+
+    vltl init | source
+
+    set -l converted (vltl convert "ㅎㅑㅆ")
+    if test "$converted" = giT
+        print_test_result "case handling: shifted Dubeolsik input remains giT" 0
+    else
+        print_test_result "case handling: shifted Dubeolsik input remains giT (got: $converted)" 1
+    end
+
+    function GiT
+    end
+    set -l function_candidate (__vltl_resolve_command GiT)
+    functions --erase GiT
+    if test "$function_candidate" = GiT
+        print_test_result "case handling: case-sensitive fish function is preserved" 0
+    else
+        print_test_result "case handling: case-sensitive fish function is preserved (got: $function_candidate)" 1
+    end
+
+    if __vltl_is_macos
+        set -l resolved (__vltl_resolve_command "$converted")
+        if test "$resolved" = git
+            print_test_result "case handling: macOS executable resolves to lowercase git" 0
+        else
+            print_test_result "case handling: macOS executable resolves to lowercase git (got: $resolved)" 1
+        end
     end
 end
 
@@ -320,11 +359,11 @@ function test_switch_to_english_command
             print_test_result "switch-to-english command exists on macOS" 1
         end
 
-        # Test 2: Command should execute without error (even if IME doesn't change)
-        if vltl switch-to-english 2>&1 | grep -qv "error: unrecognized subcommand"
-            print_test_result "switch-to-english command executes on macOS" 0
+        # Test 2: Command-specific help should be available without changing IME state
+        if vltl switch-to-english --help >/dev/null
+            print_test_result "switch-to-english command help is available on macOS" 0
         else
-            print_test_result "switch-to-english command executes on macOS" 1
+            print_test_result "switch-to-english command help is available on macOS" 1
         end
     else
         echo "Running on Linux - verifying switch-to-english is not available"
@@ -421,12 +460,12 @@ function test_no_abbr_for_nonexistent_command
     # Source the init script
     vltl init | source
 
-    # Verify the init script includes a type -q guard for command existence
+    # Verify the init script includes the command resolution guard
     set -l init_content (vltl init)
-    if echo "$init_content" | grep -q 'type -q'
-        print_test_result "guard: init script includes type -q check" 0
+    if echo "$init_content" | grep -q '__vltl_resolve_command'
+        print_test_result "guard: init script includes command resolution" 0
     else
-        print_test_result "guard: init script includes type -q check" 1
+        print_test_result "guard: init script includes command resolution" 1
     end
 
     # Verify that a non-existent command is not recognized by type -q or abbr -q
@@ -515,6 +554,7 @@ test_extract_programs_command
 test_is_command_position
 test_no_abbr_for_nonexistent_command
 test_integration_convert_flow
+test_macos_case_insensitive_command
 
 # Print summary
 echo ""

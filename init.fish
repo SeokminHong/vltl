@@ -1,3 +1,39 @@
+function __vltl_is_macos
+    test (uname -s) = Darwin
+end
+
+function __vltl_resolve_command
+    set -l candidate $argv[1]
+
+    if abbr -q -- "$candidate"
+        printf '%s\n' "$candidate"
+        return 0
+    end
+
+    set -l candidate_type (type -t -- "$candidate" 2>/dev/null)
+    if test -n "$candidate_type"; and test "$candidate_type" != file
+        printf '%s\n' "$candidate"
+        return 0
+    end
+
+    if __vltl_is_macos
+        set -l lowercase_candidate (string lower -- "$candidate")
+        if test "$lowercase_candidate" != "$candidate"
+            if test (type -t -- "$lowercase_candidate" 2>/dev/null) = file
+                printf '%s\n' "$lowercase_candidate"
+                return 0
+            end
+        end
+    end
+
+    if test "$candidate_type" = file
+        printf '%s\n' "$candidate"
+        return 0
+    end
+
+    return 1
+end
+
 function __vltl_convert_and_expand
     set -l token (commandline --current-token)
 
@@ -17,10 +53,8 @@ function __vltl_convert_and_expand
 
         set -l converted ($__vltl_bin convert -- "$token")
         if test -n "$converted"; and test "$converted" != "$token"
-            # 존재하지 않는 명령어에 대해서는 변환하지 않음
-            if not type -q "$converted"; and not abbr -q -- "$converted"
-                return
-            end
+            set converted (__vltl_resolve_command "$converted")
+            or return
 
             commandline --current-token --replace -- "$converted"
 
@@ -30,7 +64,9 @@ function __vltl_convert_and_expand
             end
 
             # Switch IME to English (only available on macOS)
-            $__vltl_bin switch-to-english 2>/dev/null
+            if __vltl_is_macos
+                $__vltl_bin switch-to-english 2>/dev/null
+            end
         end
     end
 end
