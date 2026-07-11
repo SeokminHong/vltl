@@ -43,6 +43,10 @@ function __vltl_convert_and_expand
         return
     end
 
+    if abbr -q -- "$token"
+        return
+    end
+
     # $VLTL_PATH가 설정되어 있으면 해당 경로의 vltl을 사용, 아니면 PATH의 vltl 사용
     set -l __vltl_bin vltl
     if set -q VLTL_PATH

@@ -236,6 +236,12 @@ function test_resolve_command
     else
         print_test_result "resolve: init avoids legacy vltl subprocess chain" 1
     end
+
+    if string match -q '*abbr -q -- "$token"*' -- "$init_content"
+        print_test_result "resolve: existing Korean abbr bypasses vltl" 0
+    else
+        print_test_result "resolve: existing Korean abbr bypasses vltl" 1
+    end
 end
 
 function test_auto_register_abbr
